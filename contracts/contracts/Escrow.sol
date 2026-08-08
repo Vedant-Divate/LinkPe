@@ -7,7 +7,12 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 contract LinkPeEscrow is ReentrancyGuard {
     // Official USDC Contract on Polygon Amoy Testnet
     // (We will use this for testing, real Polygon USDC can be swapped later)
-    address public constant USDC = 0x41E94Eb019C0762f9Bfcf9Fb1E58725BfB0e7582; 
+    IERC20 public usdc;
+
+
+    constructor(address _usdc) {
+        usdc = IERC20(_usdc);
+    }
     
     enum State { Pending, Funded, Submitted, Released, Disputed, Cancelled }
     
@@ -54,7 +59,7 @@ contract LinkPeEscrow is ReentrancyGuard {
         currentEscrow.client = msg.sender;
         currentEscrow.state = State.Funded;
 
-        require(IERC20(USDC).transferFrom(msg.sender, address(this), currentEscrow.amount), "USDC transfer failed");
+        require(IERC20(usdc).transferFrom(msg.sender, address(this), currentEscrow.amount), "usdc transfer failed");
 
         emit EscrowFunded(msg.sender, currentEscrow.freelancer, currentEscrow.amount);
     }
@@ -71,9 +76,9 @@ contract LinkPeEscrow is ReentrancyGuard {
         currentEscrow.state = State.Cancelled;
         
         // Refund client
-        IERC20(USDC).transfer(currentEscrow.client, refundAmount);
+        IERC20(usdc).transfer(currentEscrow.client, refundAmount);
         // Send fee to treasury (you can replace address(this) with a real treasury wallet)
-        IERC20(USDC).transfer(address(this), fee);
+        IERC20(usdc).transfer(address(this), fee);
     }
 
     // Step 4: Freelancer submits work
@@ -93,7 +98,7 @@ contract LinkPeEscrow is ReentrancyGuard {
         require(currentEscrow.state == State.Submitted, "Work not submitted");
 
         currentEscrow.state = State.Released;
-        IERC20(USDC).transfer(currentEscrow.freelancer, currentEscrow.amount);
+        IERC20(usdc).transfer(currentEscrow.freelancer, currentEscrow.amount);
 
         emit FundsReleased(currentEscrow.freelancer, currentEscrow.amount);
     }
@@ -104,7 +109,7 @@ contract LinkPeEscrow is ReentrancyGuard {
         require(block.timestamp >= currentEscrow.submissionTimestamp + TIME_LOCK, "Time lock not expired");
 
         currentEscrow.state = State.Released;
-        IERC20(USDC).transfer(currentEscrow.freelancer, currentEscrow.amount);
+        IERC20(usdc).transfer(currentEscrow.freelancer, currentEscrow.amount);
 
         emit FundsReleased(currentEscrow.freelancer, currentEscrow.amount);
     }
@@ -141,8 +146,8 @@ contract LinkPeEscrow is ReentrancyGuard {
 
         currentEscrow.state = State.Released;
 
-        IERC20(USDC).transfer(currentEscrow.freelancer, freelancerAmount);
-        IERC20(USDC).transfer(currentEscrow.client, clientAmount);
+        IERC20(usdc).transfer(currentEscrow.freelancer, freelancerAmount);
+        IERC20(usdc).transfer(currentEscrow.client, clientAmount);
 
         emit FundsReleased(currentEscrow.freelancer, freelancerAmount);
     }
@@ -160,11 +165,11 @@ contract LinkPeEscrow is ReentrancyGuard {
         if (split > 0) {
             uint256 freelancerAmount = (currentEscrow.amount * split) / 100;
             uint256 clientAmount = currentEscrow.amount - freelancerAmount;
-            IERC20(USDC).transfer(currentEscrow.freelancer, freelancerAmount);
-            IERC20(USDC).transfer(currentEscrow.client, clientAmount);
+            IERC20(usdc).transfer(currentEscrow.freelancer, freelancerAmount);
+            IERC20(usdc).transfer(currentEscrow.client, clientAmount);
         } else {
             // Refund client entirely
-            IERC20(USDC).transfer(currentEscrow.client, currentEscrow.amount);
+            IERC20(usdc).transfer(currentEscrow.client, currentEscrow.amount);
         }
     }
 }
