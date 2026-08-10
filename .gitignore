@@ -40,3 +40,13 @@ Thumbs.db
 # Editor
 .vscode/
 .idea/
+
+## AI Editor Auto-generated Skills
+.agents/
+.claude/
+.windsurf/
+skills-lock.json
+
+# Database files
+*.db
+*.db-journal
