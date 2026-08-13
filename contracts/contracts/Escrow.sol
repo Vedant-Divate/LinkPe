@@ -37,31 +37,23 @@ contract LinkPeEscrow is ReentrancyGuard {
     event SplitProposed(address indexed freelancer, uint8 split);
     event FundsReleased(address indexed to, uint256 amount);
 
-    // Step 1: Freelancer creates the terms
-    function createEscrow(uint256 _amount) external {
+    // Step 1 & 2 Combined: Client funds the escrow and binds the freelancer address
+    function createAndFundEscrow(address _freelancer, uint256 _amount) external nonReentrant {
         require(currentEscrow.state == State.Pending || currentEscrow.state == State.Released || currentEscrow.state == State.Cancelled, "Active escrow exists");
         
         currentEscrow = Escrow({
-            freelancer: msg.sender,
-            client: address(0),
+            freelancer: _freelancer,
+            client: msg.sender, // Dynamic Binding!
             amount: _amount,
-            state: State.Pending,
+            state: State.Funded,
             submissionTimestamp: 0,
             disputeTimestamp: 0,
             proposedSplit: 0
         });
-    }
 
-    // Step 2: Client funds the escrow (Dynamic Binding)
-    function fundEscrow() external nonReentrant {
-        require(currentEscrow.state == State.Pending, "Escrow not pending");
-        
-        currentEscrow.client = msg.sender;
-        currentEscrow.state = State.Funded;
+        require(usdc.transferFrom(msg.sender, address(this), _amount), "USDC transfer failed");
 
-        require(IERC20(usdc).transferFrom(msg.sender, address(this), currentEscrow.amount), "usdc transfer failed");
-
-        emit EscrowFunded(msg.sender, currentEscrow.freelancer, currentEscrow.amount);
+        emit EscrowFunded(msg.sender, _freelancer, _amount);
     }
 
     // Step 3: Early Cancellation (Before work is submitted)
