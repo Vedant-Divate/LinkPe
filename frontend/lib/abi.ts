@@ -22,6 +22,28 @@ export const escrowABI = [
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "currentEscrow",
+    "outputs": [
+      {
+        "components": [
+          { "internalType": "address", "name": "freelancer", "type": "address" },
+          { "internalType": "address", "name": "client", "type": "address" },
+          { "internalType": "uint256", "name": "amount", "type": "uint256" },
+          { "internalType": "enum LinkPeEscrow.State", "name": "state", "type": "uint8" },
+          { "internalType": "uint256", "name": "submissionTimestamp", "type": "uint256" },
+          { "internalType": "uint256", "name": "disputeTimestamp", "type": "uint256" },
+          { "internalType": "uint8", "name": "proposedSplit", "type": "uint8" }
+        ],
+        "internalType": "struct LinkPeEscrow.Escrow",
+        "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
   }
 ];
 

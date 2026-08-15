@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
-import { useAccount, useWriteContract } from "wagmi";
+import { useAccount, useWriteContract, useReadContract } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { escrowABI, usdcABI } from "@/lib/abi";
 import { parseUnits } from "viem";
@@ -18,6 +18,22 @@ export default function EscrowPage() {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
 
+  // Read the current smart contract state
+  const { data: contractState, isFetched } = useReadContract({
+    address: ESCROW_ADDRESS,
+    abi: escrowABI,
+    functionName: "currentEscrow",
+    // In Wagmi v2, refetchInterval must go inside the 'query' object
+    query: {
+      refetchInterval: 2000,
+    }
+  });
+
+
+ // Cast to any to bypass TypeScript struct strictness, and fallback to array index just in case
+  const stateAsAny = contractState as any;
+  const stateNum = stateAsAny ? Number(stateAsAny.state ?? stateAsAny[3]) : -1;
+
   useEffect(() => {
     if (params.id) {
       fetch(`http://localhost:3001/api/escrow/${params.id}`)
@@ -32,7 +48,6 @@ export default function EscrowPage() {
     setStatus("1/2: Approving USDC...");
 
     try {
-      // Step 1: Approve USDC
       await writeContractAsync({
         address: USDC_ADDRESS,
         abi: usdcABI,
@@ -42,7 +57,6 @@ export default function EscrowPage() {
 
       setStatus("2/2: Funding Escrow...");
       
-      // Step 2: Fund Escrow
       await writeContractAsync({
         address: ESCROW_ADDRESS,
         abi: escrowABI,
@@ -59,7 +73,25 @@ export default function EscrowPage() {
     }
   };
 
-  // Helper function to give the client some fake USDC to test with
+  const handleRelease = async () => {
+    setLoading(true);
+    setStatus("Awaiting signature to release funds...");
+    try {
+      await writeContractAsync({
+        address: ESCROW_ADDRESS,
+        abi: escrowABI,
+        functionName: "releaseFunds",
+        args: [],
+      });
+      setStatus("Success! Funds released to freelancer.");
+    } catch (error) {
+      console.error(error);
+      setStatus("Transaction failed or rejected.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const mintTestUsdc = async () => {
     setLoading(true);
     try {
@@ -85,6 +117,11 @@ export default function EscrowPage() {
 
       <h1 className="text-3xl font-bold mb-8">Pending Escrow Request</h1>
 
+      {/* DEBUG BOX - Let's see what the blockchain says! */}
+      <div className="mb-4 p-2 bg-yellow-900 text-yellow-300 rounded text-center text-sm w-full max-w-md">
+        DEBUG: Contract State = {stateNum} | Fetched: {isFetched ? "Yes" : "No"}
+      </div>
+
       {!escrowData ? (
         <p>Loading link details...</p>
       ) : (
@@ -102,14 +139,13 @@ export default function EscrowPage() {
             <p className="text-2xl font-bold text-green-400">{escrowData.amount} USDC</p>
           </div>
 
-          {!isConnected ? (
-            <p className="text-center text-yellow-400">Please connect your wallet to proceed.</p>
-          ) : (
-            <div className="flex flex-col gap-4">
+          {/* Show Fund button ONLY if State is 0 (Pending) */}
+          {stateNum === 0 && (
+            <>
               <button
                 onClick={handleFund}
                 disabled={loading}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors disabled:opacity-50"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors disabled:opacity-50 mb-4"
               >
                 {loading ? "Processing..." : "Fund Escrow (Lock USDC)"}
               </button>
@@ -120,9 +156,36 @@ export default function EscrowPage() {
               >
                 Need test USDC? Click to mint 1000
               </button>
-              {status && <p className="text-center text-sm text-gray-300 mt-2">{status}</p>}
+            </>
+          )}
+
+          {/* Show Approve button ONLY if State is 2 (Submitted) */}
+          {stateNum === 2 && (
+            <div className="mt-4">
+              <div className="p-4 bg-purple-900/50 border border-purple-500 rounded-lg mb-6">
+                <p className="text-purple-400 font-bold mb-2">Work Submitted!</p>
+                <p className="text-xs text-gray-300 break-all">IPFS Hash: Uploaded to IPFS (Encrypted)</p>
+                <p className="text-xs text-gray-400 mt-2">The 7-day approval timer has started.</p>
+              </div>
+              <button
+                onClick={handleRelease}
+                disabled={loading}
+                className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors disabled:opacity-50"
+              >
+                {loading ? "Processing..." : "Approve & Release Funds"}
+              </button>
             </div>
           )}
+
+          {/* Show Success message if State is 3 (Released) */}
+          {stateNum === 3 && (
+            <div className="p-4 bg-green-900/50 border border-green-500 rounded-lg text-center">
+              <p className="text-green-400 font-bold">Funds Released!</p>
+              <p className="text-sm text-gray-300 mt-2">The freelancer has been paid.</p>
+            </div>
+          )}
+
+          {status && <p className="text-center text-sm text-gray-300 mt-4">{status}</p>}
         </div>
       )}
     </main>
