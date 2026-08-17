@@ -1,12 +1,13 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAccount, useWriteContract, useReadContract } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { escrowABI } from "@/lib/abi";
 import { encryptAndUploadFile } from "@/lib/ipfs";
-import EthCrypto from "eth-crypto";
+import  EthCrypto  from "eth-crypto";
 
 const ESCROW_ADDRESS = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
+const TIME_LOCK_SECONDS = 0; // 2 minutes for local testing
 
 export default function Home() {
   const { address, isConnected } = useAccount();
@@ -20,6 +21,7 @@ export default function Home() {
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [txStatus, setTxStatus] = useState("");
+  const [remainingTime, setRemainingTime] = useState(0);
 
   // Read the active escrow state from the smart contract
   const { data: contractState } = useReadContract({
@@ -31,6 +33,21 @@ export default function Home() {
   const stateAsAny = contractState as any;
   const stateNum = stateAsAny ? Number(stateAsAny.state ?? stateAsAny[3]) : -1;
   const clientAddr = stateAsAny ? stateAsAny.client ?? stateAsAny[1] : "";
+  const submissionTimestamp = stateAsAny ? Number(stateAsAny.submissionTimestamp ?? stateAsAny[4]) : 0;
+
+  // Countdown Timer Logic
+  useEffect(() => {
+    if (stateNum === 2 && submissionTimestamp > 0) {
+      const timer = setInterval(() => {
+        const currentTime = Math.floor(Date.now() / 1000);
+        const expiryTime = submissionTimestamp + TIME_LOCK_SECONDS;
+        const diff = expiryTime - currentTime;
+        setRemainingTime(diff > 0 ? diff : 0);
+      }, 1000);
+
+      return () => clearInterval(timer);
+    }
+  }, [stateNum, submissionTimestamp]);
 
   const generateLink = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,6 +102,27 @@ export default function Home() {
     } catch (error) {
       console.error(error);
       setTxStatus("Transaction failed or rejected.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleAutoRelease = async () => {
+    setSubmitting(true);
+    setTxStatus("Awaiting signature to auto-release funds...");
+    try {
+      await writeContractAsync({
+        address: ESCROW_ADDRESS,
+        abi: escrowABI,
+        functionName: "autoReleaseFunds",
+        args: [],
+      });
+      setTxStatus("Success! Funds auto-released.");
+    } catch (error: any) {
+      console.error(error);
+      // Get the actual reason from the blockchain
+      const reason = error.shortMessage || error.message;
+      setTxStatus("Transaction failed. Time lock may not be expired yet.");
     } finally {
       setSubmitting(false);
     }
@@ -172,7 +210,26 @@ export default function Home() {
         {stateNum === 2 && (
           <div className="bg-purple-900/50 border border-purple-500 p-4 rounded">
             <p className="text-purple-400 font-bold mb-2">Work Submitted!</p>
-            <p className="text-sm text-gray-400">Waiting for client to approve. 7-day auto-release timer is active.</p>
+            <p className="text-sm text-gray-400 mb-4">Waiting for client to approve.</p>
+            
+            {remainingTime > 0 ? (
+              <p className="text-sm text-yellow-400 mb-4 font-mono">
+                Auto-Release available in: {Math.floor(remainingTime / 60)}m {remainingTime % 60}s
+              </p>
+            ) : (
+              <p className="text-sm text-green-400 mb-4 font-bold">
+                Time lock expired! You can claim your funds.
+              </p>
+            )}
+
+            <button
+              onClick={handleAutoRelease}
+              disabled={submitting || remainingTime > 0}
+              className="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {submitting ? "Processing..." : "Claim Auto-Release"}
+            </button>
+            {txStatus && <p className="text-center text-sm text-gray-300 mt-4">{txStatus}</p>}
           </div>
         )}
 

@@ -29,7 +29,7 @@ contract LinkPeEscrow is ReentrancyGuard {
     Escrow public currentEscrow;
     
     // 7 days in seconds (604800). For testing, we will use 120 seconds (2 mins)
-    uint256 public constant TIME_LOCK = 120; 
+    uint256 public constant TIME_LOCK = 0; 
 
     event EscrowFunded(address indexed client, address indexed freelancer, uint256 amount);
     event WorkSubmitted(address indexed freelancer, string ipfsHash);

@@ -25,6 +25,20 @@ export const escrowABI = [
   },
   {
     "inputs": [],
+    "name": "autoReleaseFunds",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "rejectWork",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "currentEscrow",
     "outputs": [
       {

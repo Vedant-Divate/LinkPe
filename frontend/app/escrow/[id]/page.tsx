@@ -92,6 +92,25 @@ export default function EscrowPage() {
     }
   };
 
+  const handleReject = async () => {
+    setLoading(true);
+    setStatus("Awaiting signature to reject work...");
+    try {
+      await writeContractAsync({
+        address: ESCROW_ADDRESS,
+        abi: escrowABI,
+        functionName: "rejectWork",
+        args: [],
+      });
+      setStatus("Work rejected. Dispute started.");
+    } catch (error) {
+      console.error(error);
+      setStatus("Transaction failed or rejected.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const mintTestUsdc = async () => {
     setLoading(true);
     try {
@@ -159,7 +178,7 @@ export default function EscrowPage() {
             </>
           )}
 
-          {/* Show Approve button ONLY if State is 2 (Submitted) */}
+          {/* Show Approve/Reject buttons if Submitted (2) */}
           {stateNum === 2 && (
             <div className="mt-4">
               <div className="p-4 bg-purple-900/50 border border-purple-500 rounded-lg mb-6">
@@ -167,13 +186,22 @@ export default function EscrowPage() {
                 <p className="text-xs text-gray-300 break-all">IPFS Hash: Uploaded to IPFS (Encrypted)</p>
                 <p className="text-xs text-gray-400 mt-2">The 7-day approval timer has started.</p>
               </div>
-              <button
-                onClick={handleRelease}
-                disabled={loading}
-                className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors disabled:opacity-50"
-              >
-                {loading ? "Processing..." : "Approve & Release Funds"}
-              </button>
+              <div className="flex gap-4">
+                <button
+                  onClick={handleRelease}
+                  disabled={loading}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors disabled:opacity-50"
+                >
+                  {loading ? "Processing..." : "Approve & Release"}
+                </button>
+                <button
+                  onClick={handleReject}
+                  disabled={loading}
+                  className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition-colors disabled:opacity-50"
+                >
+                  {loading ? "Processing..." : "Reject Work"}
+                </button>
+              </div>
             </div>
           )}
 
