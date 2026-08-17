@@ -18,14 +18,12 @@ export default function EscrowPage() {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
 
-  // Read the current smart contract state
   const { data: contractState, isFetched } = useReadContract({
     address: ESCROW_ADDRESS,
     abi: escrowABI,
     functionName: "currentEscrow",
-    // In Wagmi v2, refetchInterval must go inside the 'query' object
     query: {
-      refetchInterval: 2000,
+      refetchInterval: 2000, // Auto-refetch every 2 seconds
     }
   });
 
@@ -33,6 +31,7 @@ export default function EscrowPage() {
  // Cast to any to bypass TypeScript struct strictness, and fallback to array index just in case
   const stateAsAny = contractState as any;
   const stateNum = stateAsAny ? Number(stateAsAny.state ?? stateAsAny[3]) : -1;
+  const proposedSplit = stateAsAny ? Number(stateAsAny.proposedSplit ?? stateAsAny[6]) : 0;
 
   useEffect(() => {
     if (params.id) {
@@ -106,6 +105,26 @@ export default function EscrowPage() {
     } catch (error) {
       console.error(error);
       setStatus("Transaction failed or rejected.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAcceptSplit = async () => {
+    setLoading(true);
+    setStatus("Awaiting signature to accept split...");
+    try {
+      await writeContractAsync({
+        address: ESCROW_ADDRESS,
+        abi: escrowABI,
+        functionName: "acceptSplit",
+        args: [],
+      });
+      setStatus("Success! Split accepted and funds distributed.");
+    } catch (error: any) {
+      console.error(error);
+      const reason = error.shortMessage || error.message;
+      setStatus(`Transaction failed: ${reason}`);
     } finally {
       setLoading(false);
     }
@@ -202,6 +221,34 @@ export default function EscrowPage() {
                   {loading ? "Processing..." : "Reject Work"}
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* Show Accept Split button if Disputed (4) */}
+          {stateNum === 4 && (
+            <div className="mt-4">
+              <div className="p-4 bg-red-900/50 border border-red-500 rounded-lg mb-6">
+                <p className="text-red-400 font-bold mb-2">Work Rejected! (Disputed)</p>
+                {proposedSplit > 0 ? (
+                  <div className="mt-2 text-sm text-yellow-300">
+                    <p>The freelancer is proposing to keep <strong>{proposedSplit}%</strong> of the funds.</p>
+                    <p className="text-gray-400 mt-1">If you accept, {100 - proposedSplit}% will be refunded to you.</p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-300 mt-2">Waiting for the freelancer to propose a partial refund split...</p>
+                )}
+              </div>
+                  
+              {proposedSplit > 0 && (
+                <button
+                  onClick={handleAcceptSplit}
+                  disabled={loading}
+                  className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded transition-colors disabled:opacity-50"
+                >
+                  {loading ? "Processing..." : `Accept ${proposedSplit}% Split`}
+                </button>
+              )}
+              {status && <p className="text-center text-sm text-gray-300 mt-4">{status}</p>}
             </div>
           )}
 

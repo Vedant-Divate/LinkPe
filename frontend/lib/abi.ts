@@ -37,6 +37,23 @@ export const escrowABI = [
     "stateMutability": "nonpayable",
     "type": "function"
   },
+
+  {
+    "inputs": [{ "internalType": "uint8", "name": "_splitPercentage", "type": "uint8" }],
+    "name": "proposeSplit",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  
+  {
+    "inputs": [],
+    "name": "acceptSplit",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+
   {
     "inputs": [],
     "name": "currentEscrow",

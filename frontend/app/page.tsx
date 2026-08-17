@@ -9,7 +9,9 @@ import  EthCrypto  from "eth-crypto";
 const ESCROW_ADDRESS = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
 const TIME_LOCK_SECONDS = 604800; // 2 minutes for local testing
 
+
 export default function Home() {
+  const [splitPercent, setSplitPercent] = useState("");
   const { address, isConnected } = useAccount();
   const { writeContractAsync } = useWriteContract();
 
@@ -28,6 +30,9 @@ export default function Home() {
     address: ESCROW_ADDRESS,
     abi: escrowABI,
     functionName: "currentEscrow",
+    query: {
+      refetchInterval: 2000, // Automatically checks the blockchain every 2 seconds!
+    }
   });
 
   const stateAsAny = contractState as any;
@@ -123,6 +128,26 @@ export default function Home() {
       // Get the actual reason from the blockchain
       const reason = error.shortMessage || error.message;
       setTxStatus("Transaction failed. Time lock may not be expired yet.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleProposeSplit = async () => {
+    setSubmitting(true);
+    setTxStatus("Awaiting signature to propose split...");
+    try {
+      await writeContractAsync({
+        address: ESCROW_ADDRESS,
+        abi: escrowABI,
+        functionName: "proposeSplit",
+        args: [Number(splitPercent)],
+      });
+      setTxStatus(`Success! Proposed ${splitPercent}% split to client.`);
+    } catch (error: any) {
+      console.error(error);
+      const reason = error.shortMessage || error.message;
+      setTxStatus(`Transaction failed: ${reason}`);
     } finally {
       setSubmitting(false);
     }
@@ -240,6 +265,30 @@ export default function Home() {
           </div>
         )}
       </div>
+
+      {stateNum === 4 && (
+        <div className="bg-red-900/50 border border-red-500 p-4 rounded">
+          <p className="text-red-400 font-bold mb-2">Work Rejected! (Disputed)</p>
+          <p className="text-sm text-gray-400 mb-4">The client rejected the work. Propose a partial refund split to resolve the dispute.</p>
+          <div className="flex gap-4">
+            <input
+              type="number"
+              value={splitPercent}
+              onChange={(e) => setSplitPercent(e.target.value)}
+              className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:border-blue-500"
+              placeholder="e.g. 50 (for 50%)"
+            />
+            <button
+              onClick={handleProposeSplit}
+              disabled={submitting || !splitPercent}
+              className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded transition-colors disabled:opacity-50 whitespace-nowrap"
+            >
+              {submitting ? "Processing..." : "Propose Split"}
+            </button>
+          </div>
+          {txStatus && <p className="text-center text-sm text-gray-300 mt-4">{txStatus}</p>}
+        </div>
+      )}
 
       {/* Show Submit Work form ONLY if state is 1 (Funded) */}
       {stateNum === 1 && (
