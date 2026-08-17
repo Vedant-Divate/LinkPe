@@ -7,7 +7,7 @@ import { encryptAndUploadFile } from "@/lib/ipfs";
 import  EthCrypto  from "eth-crypto";
 
 const ESCROW_ADDRESS = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
-const TIME_LOCK_SECONDS = 0; // 2 minutes for local testing
+const TIME_LOCK_SECONDS = 604800; // 2 minutes for local testing
 
 export default function Home() {
   const { address, isConnected } = useAccount();
