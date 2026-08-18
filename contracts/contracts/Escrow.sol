@@ -27,6 +27,7 @@ contract LinkPeEscrow is ReentrancyGuard {
     }
     
     Escrow public currentEscrow;
+    string public currentIpfsHash;
     
     // 7 days in seconds (604800). For testing, we will use 120 seconds (2 mins)
     uint256 public constant TIME_LOCK = 604800; 
@@ -61,12 +62,10 @@ contract LinkPeEscrow is ReentrancyGuard {
         require(currentEscrow.state == State.Funded, "Can only cancel funded escrow");
         require(msg.sender == currentEscrow.client || msg.sender == currentEscrow.freelancer, "Not authorized");
         
-        // For MVP, we will do a 5% fee to the treasury (address(0) for now, or this contract)
         uint256 fee = (currentEscrow.amount * 5) / 100;
         uint256 refundAmount = currentEscrow.amount - fee;
 
         currentEscrow.state = State.Cancelled;
-        
         // Refund client
         IERC20(usdc).transfer(currentEscrow.client, refundAmount);
         // Send fee to treasury (you can replace address(this) with a real treasury wallet)
@@ -80,6 +79,7 @@ contract LinkPeEscrow is ReentrancyGuard {
 
         currentEscrow.state = State.Submitted;
         currentEscrow.submissionTimestamp = block.timestamp;
+        currentIpfsHash = _ipfsHash; // <-- ADD THIS LINE
         
         emit WorkSubmitted(msg.sender, _ipfsHash);
     }

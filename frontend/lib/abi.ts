@@ -45,10 +45,26 @@ export const escrowABI = [
     "stateMutability": "nonpayable",
     "type": "function"
   },
-  
+
   {
     "inputs": [],
     "name": "acceptSplit",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+
+  {
+    "inputs": [],
+    "name": "currentIpfsHash",
+    "outputs": [{ "internalType": "string", "name": "", "type": "string" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+
+  {
+    "inputs": [],
+    "name": "requestCancel",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
