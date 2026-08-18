@@ -24,6 +24,7 @@ export default function Home() {
   const [submitting, setSubmitting] = useState(false);
   const [txStatus, setTxStatus] = useState("");
   const [remainingTime, setRemainingTime] = useState(0);
+  const [generatedPrivateKey, setGeneratedPrivateKey] = useState("");
 
   // Read the active escrow state from the smart contract
   const { data: contractState } = useReadContract({
@@ -39,6 +40,7 @@ export default function Home() {
   const stateNum = stateAsAny ? Number(stateAsAny.state ?? stateAsAny[3]) : -1;
   const clientAddr = stateAsAny ? stateAsAny.client ?? stateAsAny[1] : "";
   const submissionTimestamp = stateAsAny ? Number(stateAsAny.submissionTimestamp ?? stateAsAny[4]) : 0;
+  const escrowAmount = stateAsAny ? Number(stateAsAny.amount) / 1e18 : 0;
 
   // Countdown Timer Logic
   useEffect(() => {
@@ -90,6 +92,7 @@ export default function Home() {
 
     try {
       const demoClientIdentity = EthCrypto.createIdentity();
+      setGeneratedPrivateKey(demoClientIdentity.privateKey);
       const clientPublicKey = demoClientIdentity.publicKey;
 
       const ipfsHash = await encryptAndUploadFile(file, clientPublicKey);
@@ -123,6 +126,7 @@ export default function Home() {
         args: [],
       });
       setTxStatus("Success! Funds auto-released.");
+      setTxStatus(`✅ Success! You received ${escrowAmount} USDC.`);
     } catch (error: any) {
       console.error(error);
       // Get the actual reason from the blockchain
@@ -144,6 +148,8 @@ export default function Home() {
         args: [Number(splitPercent)],
       });
       setTxStatus(`Success! Proposed ${splitPercent}% split to client.`);
+      const freelancerGets = (escrowAmount * Number(splitPercent)) / 100;
+      setTxStatus(`✅ Success! Proposed ${splitPercent}% split. You will receive ${freelancerGets} USDC if accepted.`);
     } catch (error: any) {
       console.error(error);
       const reason = error.shortMessage || error.message;
@@ -235,22 +241,40 @@ export default function Home() {
         {stateNum === 2 && (
           <div className="bg-purple-900/50 border border-purple-500 p-4 rounded">
             <p className="text-purple-400 font-bold mb-2">Work Submitted!</p>
-            <p className="text-sm text-gray-400 mb-4">Waiting for client to approve.</p>
+            <p className="text-sm text-gray-400 mb-4">Waiting for client to approve. 7-day auto-release timer is active.</p>
             
-            {remainingTime > 0 ? (
-              <p className="text-sm text-yellow-400 mb-4 font-mono">
-                Auto-Release available in: {Math.floor(remainingTime / 60)}m {remainingTime % 60}s
-              </p>
-            ) : (
-              <p className="text-sm text-green-400 mb-4 font-bold">
-                Time lock expired! You can claim your funds.
-              </p>
+            {/* Decryption Key Box for the Client */}
+            {generatedPrivateKey && (
+              <div className="mt-4 p-4 bg-gray-800 border border-dashed border-gray-500 rounded">
+                <p className="text-sm text-yellow-400 font-bold mb-2">Client Decryption Key:</p>
+                <p className="text-xs text-gray-400 mb-2">
+                  Send this key to the client (or paste it into the client dashboard yourself). 
+                  Without this, the file cannot be decrypted.
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={generatedPrivateKey}
+                    readOnly
+                    className="w-full px-2 py-1 bg-gray-700 rounded text-xs text-gray-300 break-all"
+                  />
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(generatedPrivateKey);
+                      alert("Private key copied to clipboard!");
+                    }}
+                    className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-1 px-3 rounded whitespace-nowrap"
+                  >
+                    Copy
+                  </button>
+                </div>
+              </div>
             )}
 
             <button
               onClick={handleAutoRelease}
               disabled={submitting || remainingTime > 0}
-              className="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-4"
             >
               {submitting ? "Processing..." : "Claim Auto-Release"}
             </button>
