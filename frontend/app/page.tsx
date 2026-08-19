@@ -171,10 +171,10 @@ export default function Home() {
 
   if (!isConnected) {
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center p-24 bg-gray-900 text-white">
-        <div className="absolute top-8 right-8">
+      <main className="flex min-h-screen flex-col items-center py-12">
+        {/* <div className="absolute top-8 right-8">
           <ConnectButton />
-        </div>
+        </div> */}
         <h1 className="text-4xl font-bold mb-2">LinkPe</h1>
         <p className="mb-8 text-gray-400">Freelancer Dashboard</p>
         <p className="text-yellow-400 text-lg">⚠️ Please connect your wallet to generate an escrow link.</p>

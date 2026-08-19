@@ -275,10 +275,10 @@ export default function EscrowPage() {
   };
 
   return (
-    <main className="flex min-h-screen flex-col items-center p-24 bg-gray-900 text-white">
-      <div className="absolute top-8 right-8">
+    <main className="flex min-h-screen flex-col items-center py-12">
+      {/* <div className="absolute top-8 right-8">
         <ConnectButton />
-      </div>
+      </div> */}
 
       <h1 className="text-3xl font-bold mb-8">Pending Escrow Request</h1>
 
