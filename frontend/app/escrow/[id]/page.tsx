@@ -370,10 +370,25 @@ export default function EscrowPage() {
           )}
 
           {/* Cancelled State (5) */}
-          {stateNum === 5 && (
-            <div className="rounded-xl border border-white/10 bg-white/5 p-8 text-center">
-              <h3 className="text-xl font-bold text-white/80">Escrow Cancelled</h3>
-              <p className="text-white/50 mt-2">Funds were refunded (minus cancellation fee).</p>
+          {stateNum === 5 && escrowAmount > 0 && (
+            <div className="rounded-xl border border-white/10 bg-white/5 p-8 text-center space-y-6">
+              <div className="h-12 w-12 rounded-full bg-white/10 mx-auto flex items-center justify-center">
+                <svg className="h-6 w-6 text-white/60" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-white/80">Escrow Cancelled</h3>
+                <p className="text-white/50 mt-2">The escrow was cancelled early.</p>
+              </div>
+              <div className="grid grid-cols-2 gap-4 text-sm pt-6 border-t border-white/10">
+                <div>
+                  <p className="text-white/50 mb-1">Refunded to You</p>
+                  <p className="text-xl font-bold text-green-400">{(escrowAmount * 0.95).toFixed(2)} <span className="text-sm text-white/50">USDC</span></p>
+                </div>
+                <div>
+                  <p className="text-white/50 mb-1">Cancellation Fee</p>
+                  <p className="text-xl font-bold text-red-400">{(escrowAmount * 0.05).toFixed(2)} <span className="text-sm text-white/50">USDC</span></p>
+                </div>
+              </div>
             </div>
           )}
 
