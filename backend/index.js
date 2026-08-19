@@ -48,6 +48,45 @@ app.get("/api/escrow/:id", async (req, res) => {
 });
 
 const PORT = 3001;
+
+// IPFS Proxy Route (Bypasses CORS)
+app.get("/api/ipfs/:hash", async (req, res) => {
+  try {
+    const hash = req.params.hash;
+    console.log(`Fetching IPFS hash: ${hash}`);
+    
+    const gateways = [
+      `https://gateway.pinata.cloud/ipfs/${hash}`,
+      `https://ipfs.io/ipfs/${hash}`,
+      `https://dweb.link/ipfs/${hash}`
+    ];
+
+    let response;
+    for (let i = 0; i < gateways.length; i++) {
+      try {
+        console.log(`Trying gateway: ${gateways[i]}`);
+        response = await fetch(gateways[i]);
+        if (response.ok) {
+          console.log("✅ Success on gateway:", gateways[i]);
+          break;
+        }
+      } catch (e) {
+        console.log(`Gateway ${gateways[i]} failed`);
+      }
+    }
+
+    if (!response || !response.ok) {
+      return res.status(404).json({ error: "File not found on any IPFS gateway" });
+    }
+
+    const data = await response.text();
+    res.send(data);
+  } catch (error) {
+    console.error("IPFS Proxy Error:", error);
+    res.status(500).json({ error: "Failed to fetch from IPFS" });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`LinkPe Backend running on http://localhost:${PORT}`);
 });

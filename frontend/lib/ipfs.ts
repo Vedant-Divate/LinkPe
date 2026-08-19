@@ -29,6 +29,7 @@ export async function encryptAndUploadFile(file: File, clientPublicKey: string) 
     pinataContent: {
       encryptedFile: encryptedFile,
       encryptedAesKey: encryptedAesKeyString,
+      fileName: file.name, // <--- ADD THIS LINE
     },
   });
 

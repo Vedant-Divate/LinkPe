@@ -212,31 +212,15 @@ export default function EscrowPage() {
     try {
       const trimmedKey = decryptionKey.trim();
       
-      // 1. Fetch the encrypted JSON from IPFS using multiple gateways
-      const gateways = [
-        `https://w3s.link/ipfs/${ipfsHash}`,
-        `https://gateway.pinata.cloud/ipfs/${ipfsHash}`,
-        `https://cloudflare-ipfs.com/ipfs/${ipfsHash}`,
-        `https://ipfs.io/ipfs/${ipfsHash}`
-      ];
+      // 1. Fetch the encrypted JSON from YOUR backend (bypasses CORS!)
+      const response = await fetch(`http://localhost:3001/api/ipfs/${ipfsHash}`);
       
-      let response;
-      for (let i = 0; i < gateways.length; i++) {
-        try {
-          setStatus(`Fetching from gateway ${i + 1}...`);
-          response = await fetch(gateways[i]);
-          if (response.ok) break; // Stop if successful
-        } catch (e) {
-          console.log(`Gateway ${gateways[i]} failed, trying next...`);
-        }
-      }
-      
-      if (!response || !response.ok) {
-        throw new Error("All IPFS gateways failed to fetch the file.");
+      if (!response.ok) {
+        throw new Error("Backend failed to fetch IPFS file.");
       }
       
       const json = await response.json();
-      console.log("Fetched IPFS payload:", json);
+      console.log("Fetched IPFS payload via backend:", json);
       
       // 2. Decrypt the AES key using the Client's Private Key
       const encryptedAesKeyObject = EthCrypto.cipher.parse(json.encryptedAesKey);
@@ -258,7 +242,7 @@ export default function EscrowPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = "decrypted_work_file.png";
+      a.download = json.fileName || "decrypted_work_file.png";
       a.click();
       URL.revokeObjectURL(url);
       
