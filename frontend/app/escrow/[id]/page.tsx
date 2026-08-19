@@ -16,16 +16,15 @@ export default function EscrowPage() {
   const { writeContractAsync } = useWriteContract();
 
   const [escrowData, setEscrowData] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
+  const [loadingAction, setLoadingAction] = useState("");
   const [status, setStatus] = useState("");
   const [summary, setSummary] = useState("");
-  const [ipfsLoading, setIpfsLoading] = useState(false);
   const [decryptionKey, setDecryptionKey] = useState("");
   const [remainingTime, setRemainingTime] = useState(0);
 
   const TIME_LOCK_SECONDS = 604800;
 
-  const { data: contractState, isFetched } = useReadContract({
+  const { data: contractState } = useReadContract({
     address: ESCROW_ADDRESS,
     abi: escrowABI,
     functionName: "currentEscrow",
@@ -73,7 +72,7 @@ export default function EscrowPage() {
 
   const handleFund = async () => {
     if (!escrowData) return;
-    setLoading(true);
+    setLoadingAction("fund");
     setStatus("1/2: Approving USDC...");
     try {
       await writeContractAsync({ address: USDC_ADDRESS, abi: usdcABI, functionName: "approve", args: [ESCROW_ADDRESS, parseUnits(escrowData.amount.toString(), 18)] });
@@ -85,12 +84,12 @@ export default function EscrowPage() {
       console.error(error);
       setStatus(`Transaction failed: ${error.shortMessage || error.message}`);
     } finally {
-      setLoading(false);
+      setLoadingAction("");
     }
   };
 
   const handleRelease = async () => {
-    setLoading(true);
+    setLoadingAction("release");
     setStatus("Awaiting signature to release funds...");
     try {
       await writeContractAsync({ address: ESCROW_ADDRESS, abi: escrowABI, functionName: "releaseFunds", args: [] });
@@ -100,12 +99,12 @@ export default function EscrowPage() {
       console.error(error);
       setStatus(`Transaction failed: ${error.shortMessage || error.message}`);
     } finally {
-      setLoading(false);
+      setLoadingAction("");
     }
   };
 
   const handleReject = async () => {
-    setLoading(true);
+    setLoadingAction("reject");
     setStatus("Awaiting signature to reject work...");
     try {
       await writeContractAsync({ address: ESCROW_ADDRESS, abi: escrowABI, functionName: "rejectWork", args: [] });
@@ -114,12 +113,12 @@ export default function EscrowPage() {
       console.error(error);
       setStatus(`Transaction failed: ${error.shortMessage || error.message}`);
     } finally {
-      setLoading(false);
+      setLoadingAction("");
     }
   };
 
   const handleAcceptSplit = async () => {
-    setLoading(true);
+    setLoadingAction("split");
     setStatus("Awaiting signature to accept split...");
     try {
       await writeContractAsync({ address: ESCROW_ADDRESS, abi: escrowABI, functionName: "acceptSplit", args: [] });
@@ -131,12 +130,12 @@ export default function EscrowPage() {
       console.error(error);
       setStatus(`Transaction failed: ${error.shortMessage || error.message}`);
     } finally {
-      setLoading(false);
+      setLoadingAction("");
     }
   };
 
   const handleEarlyCancel = async () => {
-    setLoading(true);
+    setLoadingAction("cancel");
     setStatus("Awaiting signature to cancel escrow...");
     try {
       await writeContractAsync({ address: ESCROW_ADDRESS, abi: escrowABI, functionName: "requestCancel", args: [] });
@@ -148,14 +147,14 @@ export default function EscrowPage() {
       console.error(error);
       setStatus(`Transaction failed: ${error.shortMessage || error.message}`);
     } finally {
-      setLoading(false);
+      setLoadingAction("");
     }
   };
 
   const handleDecryptFile = async () => {
     if (!ipfsHash) return alert("No IPFS hash found!");
     if (!decryptionKey) return alert("Please enter the private key.");
-    setIpfsLoading(true);
+    setLoadingAction("decrypt");
     setStatus("Fetching and decrypting file...");
     try {
       const trimmedKey = decryptionKey.trim();
@@ -181,12 +180,12 @@ export default function EscrowPage() {
       console.error("DECRYPTION ERROR DETAILS:", error);
       setStatus("Decryption failed. Check browser console (F12) for details.");
     } finally {
-      setIpfsLoading(false);
+      setLoadingAction("");
     }
   };
 
   const mintTestUsdc = async () => {
-    setLoading(true);
+    setLoadingAction("mint");
     try {
       await writeContractAsync({ address: USDC_ADDRESS, abi: usdcABI, functionName: "mint", args: [address, parseUnits("1000", 18)] });
       alert("Minted 1000 test USDC!");
@@ -194,7 +193,7 @@ export default function EscrowPage() {
       console.error(e);
       alert(`Failed to mint: ${e.shortMessage || e.message}`);
     } finally {
-      setLoading(false);
+      setLoadingAction("");
     }
   };
 
@@ -242,11 +241,11 @@ export default function EscrowPage() {
 
           {stateNum === 0 && (
             <div className="space-y-3">
-              <button onClick={handleFund} disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
-                {loading ? (<><Spinner /> Processing...</>) : "Fund Escrow (Lock USDC)"}
+              <button onClick={handleFund} disabled={loadingAction === "fund"} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                {loadingAction === "fund" ? (<><Spinner /> Processing...</>) : "Fund Escrow (Lock USDC)"}
               </button>
-              <button onClick={mintTestUsdc} disabled={loading} className="w-full bg-white/5 hover:bg-white/10 text-white/70 text-sm py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
-                {loading ? (<><Spinner /> Minting...</>) : "Need test USDC? Click to mint 1000"}
+              <button onClick={mintTestUsdc} disabled={loadingAction === "mint"} className="w-full bg-white/5 hover:bg-white/10 text-white/70 text-sm py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
+                {loadingAction === "mint" ? (<><Spinner /> Minting...</>) : "Need test USDC? Click to mint 1000"}
               </button>
             </div>
           )}
@@ -260,11 +259,11 @@ export default function EscrowPage() {
                 </div>
                 <p className="text-sm text-white/50">The freelancer has not submitted work yet. You can cancel early for a 5% fee.</p>
               </div>
-              <button onClick={mintTestUsdc} disabled={loading} className="w-full bg-white/5 hover:bg-white/10 text-white/70 text-sm py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
-                {loading ? (<><Spinner /> Minting...</>) : "Need test USDC? Click to mint 1000"}
+              <button onClick={mintTestUsdc} disabled={loadingAction === "mint"} className="w-full bg-white/5 hover:bg-white/10 text-white/70 text-sm py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
+                {loadingAction === "mint" ? (<><Spinner /> Minting...</>) : "Need test USDC? Click to mint 1000"}
               </button>
-              <button onClick={handleEarlyCancel} disabled={loading} className="w-full bg-red-900/20 hover:bg-red-900/40 text-red-400 border border-red-500/30 text-sm py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
-                {loading ? (<><Spinner /> Processing...</>) : "Request Early Cancellation (5% Fee)"}
+              <button onClick={handleEarlyCancel} disabled={loadingAction === "cancel"} className="w-full bg-red-900/20 hover:bg-red-900/40 text-red-400 border border-red-500/30 text-sm py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
+                {loadingAction === "cancel" ? (<><Spinner /> Processing...</>) : "Request Early Cancellation (5% Fee)"}
               </button>
             </div>
           )}
@@ -290,17 +289,17 @@ export default function EscrowPage() {
                 <div className="p-4 bg-black/30 rounded-lg border border-white/10">
                   <p className="text-sm text-white/70 mb-2">Enter Decryption Key</p>
                   <input type="text" value={decryptionKey} onChange={(e) => setDecryptionKey(e.target.value)} className="w-full px-3 py-2 bg-black/40 rounded border border-white/10 text-xs text-white/80 focus:outline-none focus:border-blue-500 mb-4" placeholder="0x..." />
-                  <button onClick={handleDecryptFile} disabled={ipfsLoading || !decryptionKey} className="w-full bg-green-600 hover:bg-green-700 text-white text-sm py-2.5 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
-                    {ipfsLoading ? (<><Spinner /> Fetching & Decrypting...</>) : "Decrypt & Download Original File"}
+                  <button onClick={handleDecryptFile} disabled={loadingAction === "decrypt" || !decryptionKey} className="w-full bg-green-600 hover:bg-green-700 text-white text-sm py-2.5 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                    {loadingAction === "decrypt" ? (<><Spinner /> Fetching & Decrypting...</>) : "Decrypt & Download Original File"}
                   </button>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <button onClick={handleRelease} disabled={loading} className="bg-green-600 hover:bg-green-700 text-white font-medium py-2.5 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
-                  {loading ? (<><Spinner /> Processing...</>) : "Approve & Release"}
+                <button onClick={handleRelease} disabled={loadingAction === "release"} className="bg-green-600 hover:bg-green-700 text-white font-medium py-2.5 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                  {loadingAction === "release" ? (<><Spinner /> Processing...</>) : "Approve & Release"}
                 </button>
-                <button onClick={handleReject} disabled={loading} className="bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
-                  {loading ? (<><Spinner /> Processing...</>) : "Reject Work"}
+                <button onClick={handleReject} disabled={loadingAction === "reject"} className="bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                  {loadingAction === "reject" ? (<><Spinner /> Processing...</>) : "Reject Work"}
                 </button>
               </div>
             </div>
@@ -320,8 +319,8 @@ export default function EscrowPage() {
                 )}
               </div>
               {proposedSplit > 0 && (
-                <button onClick={handleAcceptSplit} disabled={loading} className="w-full bg-orange-600 hover:bg-orange-700 text-white font-medium py-2.5 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
-                  {loading ? (<><Spinner /> Processing...</>) : `Accept ${proposedSplit}% Split`}
+                <button onClick={handleAcceptSplit} disabled={loadingAction === "split"} className="w-full bg-orange-600 hover:bg-orange-700 text-white font-medium py-2.5 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                  {loadingAction === "split" ? (<><Spinner /> Processing...</>) : `Accept ${proposedSplit}% Split`}
                 </button>
               )}
             </div>

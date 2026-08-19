@@ -18,10 +18,9 @@ export default function Home() {
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [link, setLink] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loadingAction, setLoadingAction] = useState("");
   
   const [file, setFile] = useState<File | null>(null);
-  const [submitting, setSubmitting] = useState(false);
   const [txStatus, setTxStatus] = useState("");
   const [remainingTime, setRemainingTime] = useState(0);
   const [generatedPrivateKey, setGeneratedPrivateKey] = useState("");
@@ -73,7 +72,7 @@ export default function Home() {
 
   const generateLink = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    setLoadingAction("create");
     setLink("");
     try {
       const response = await fetch("http://localhost:3001/api/escrow", {
@@ -90,14 +89,14 @@ export default function Home() {
     } catch (error) {
       console.error(error);
     } finally {
-      setLoading(false);
+      setLoadingAction("");
     }
   };
 
   const handleFileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!file) return alert("Please select a file first.");
-    setSubmitting(true);
+    setLoadingAction("submit");
     setTxStatus("Encrypting file & uploading to IPFS...");
     try {
       const demoClientIdentity = EthCrypto.createIdentity();
@@ -116,12 +115,12 @@ export default function Home() {
       console.error(error);
       setTxStatus("Transaction failed or rejected.");
     } finally {
-      setSubmitting(false);
+      setLoadingAction("");
     }
   };
 
   const handleAutoRelease = async () => {
-    setSubmitting(true);
+    setLoadingAction("release");
     setTxStatus("Awaiting signature to auto-release funds...");
     try {
       await writeContractAsync({
@@ -136,12 +135,12 @@ export default function Home() {
       console.error(error);
       setTxStatus("Transaction failed. Time lock may not be expired yet.");
     } finally {
-      setSubmitting(false);
+      setLoadingAction("");
     }
   };
 
   const handleProposeSplit = async () => {
-    setSubmitting(true);
+    setLoadingAction("split");
     setTxStatus("Awaiting signature to propose split...");
     try {
       await writeContractAsync({
@@ -156,7 +155,7 @@ export default function Home() {
       console.error(error);
       setTxStatus(`Transaction failed: ${error.shortMessage || error.message}`);
     } finally {
-      setSubmitting(false);
+      setLoadingAction("");
     }
   };
 
@@ -215,8 +214,8 @@ export default function Home() {
                 <label className="block text-xs font-medium text-white/70 mb-2">Milestone Description</label>
                 <textarea value={description} onChange={(e) => setDescription(e.target.value)} className="w-full px-3 py-2.5 bg-black/30 rounded-lg border border-white/10 focus:outline-none focus:border-blue-500 transition-colors" placeholder="e.g. Build a landing page" required />
               </div>
-              <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
-                {loading ? (<><Spinner /> Generating...</>) : "Generate Escrow Link"}
+              <button type="submit" disabled={loadingAction === "create"} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                {loadingAction === "create" ? (<><Spinner /> Generating...</>) : "Generate Escrow Link"}
               </button>
             </form>
             {link && (
@@ -251,8 +250,8 @@ export default function Home() {
                 <h4 className="font-medium mb-4">Submit Encrypted Work</h4>
                 <form onSubmit={handleFileSubmit} className="space-y-4">
                   <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} className="w-full text-sm text-white/70 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-500/20 file:text-blue-300 hover:file:bg-blue-500/30 cursor-pointer" required />
-                  <button type="submit" disabled={submitting} className="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-2.5 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
-                    {submitting ? (<><Spinner /> Processing...</>) : "Encrypt & Submit Work"}
+                  <button type="submit" disabled={loadingAction === "submit"} className="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-2.5 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                    {loadingAction === "submit" ? (<><Spinner /> Processing...</>) : "Encrypt & Submit Work"}
                   </button>
                 </form>
               </div>
@@ -279,8 +278,8 @@ export default function Home() {
                   </div>
                 </div>
               )}
-              <button onClick={handleAutoRelease} disabled={submitting || remainingTime > 0} className="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-medium py-2.5 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
-                {submitting ? (<><Spinner /> Processing...</>) : "Claim Auto-Release"}
+              <button onClick={handleAutoRelease} disabled={loadingAction === "release" || remainingTime > 0} className="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-medium py-2.5 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                {loadingAction === "release" ? (<><Spinner /> Processing...</>) : "Claim Auto-Release"}
               </button>
             </div>
           )}
@@ -290,8 +289,8 @@ export default function Home() {
               <h3 className="font-bold text-red-400 mb-4">Work Rejected! (Disputed)</h3>
               <div className="flex gap-2">
                 <input type="number" value={splitPercent} onChange={(e) => setSplitPercent(e.target.value)} className="flex-1 px-3 py-2.5 bg-black/30 rounded-lg border border-white/10 focus:outline-none focus:border-blue-500" placeholder="e.g. 50 (for 50%)" />
-                <button onClick={handleProposeSplit} disabled={submitting || !splitPercent} className="bg-orange-600 hover:bg-orange-700 text-white font-medium py-2.5 px-4 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
-                  {submitting ? (<><Spinner /> Processing...</>) : "Propose Split"}
+                <button onClick={handleProposeSplit} disabled={loadingAction === "split" || !splitPercent} className="bg-orange-600 hover:bg-orange-700 text-white font-medium py-2.5 px-4 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                  {loadingAction === "split" ? (<><Spinner /> Processing...</>) : "Propose Split"}
                 </button>
               </div>
             </div>
