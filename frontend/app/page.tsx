@@ -329,7 +329,7 @@ export default function Home() {
               <div className="mb-6 p-3 bg-black/30 rounded-lg border border-white/5">
                 <p className="text-xs text-white/50 mb-2">Auto-Release Timer</p>
                 {remainingTime > 0 ? (
-                  <p className="font-mono text-yellow-400">{Math.floor(remainingTime / 60)}m {remainingTime % 60}s</p>
+                  <p className="font-mono text-yellow-400">{Math.floor(remainingTime / 86400)}d {Math.floor((remainingTime % 86400) / 3600)}h {Math.floor((remainingTime % 3600) / 60)}m {remainingTime % 60}s</p>
                 ) : (
                   <p className="text-green-400 font-medium">Time lock expired!</p>
                 )}
