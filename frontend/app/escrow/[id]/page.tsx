@@ -46,7 +46,6 @@ export default function EscrowPage() {
   const escrowAmount = stateAsAny ? Number(stateAsAny.amount) / 1e18 : 0;
   const submissionTimestamp = stateAsAny ? Number(stateAsAny.submissionTimestamp ?? stateAsAny[4]) : 0;
 
-  // Countdown Timer Logic for Client
   useEffect(() => {
     if (stateNum === 2 && submissionTimestamp > 0) {
       const timer = setInterval(() => {
@@ -67,7 +66,6 @@ export default function EscrowPage() {
     }
   }, [params.id]);
 
-  // Clear stale status and summary when escrow state changes
   useEffect(() => {
     setStatus("");
     setSummary("");
@@ -78,25 +76,14 @@ export default function EscrowPage() {
     setLoading(true);
     setStatus("1/2: Approving USDC...");
     try {
-      await writeContractAsync({
-        address: USDC_ADDRESS,
-        abi: usdcABI,
-        functionName: "approve",
-        args: [ESCROW_ADDRESS, parseUnits(escrowData.amount.toString(), 18)],
-      });
+      await writeContractAsync({ address: USDC_ADDRESS, abi: usdcABI, functionName: "approve", args: [ESCROW_ADDRESS, parseUnits(escrowData.amount.toString(), 18)] });
       setStatus("2/2: Funding Escrow...");
-      await writeContractAsync({
-        address: ESCROW_ADDRESS,
-        abi: escrowABI,
-        functionName: "createAndFundEscrow",
-        args: [escrowData.freelancerAddress, parseUnits(escrowData.amount.toString(), 18)],
-      });
+      await writeContractAsync({ address: ESCROW_ADDRESS, abi: escrowABI, functionName: "createAndFundEscrow", args: [escrowData.freelancerAddress, parseUnits(escrowData.amount.toString(), 18)] });
       setStatus("Success! Escrow funded.");
       setSummary(`✅ Escrow Funded: You locked ${escrowData.amount} USDC.`);
     } catch (error: any) {
       console.error(error);
-      const reason = error.shortMessage || error.message;
-      setStatus(`Transaction failed: ${reason}`);
+      setStatus(`Transaction failed: ${error.shortMessage || error.message}`);
     } finally {
       setLoading(false);
     }
@@ -106,18 +93,12 @@ export default function EscrowPage() {
     setLoading(true);
     setStatus("Awaiting signature to release funds...");
     try {
-      await writeContractAsync({
-        address: ESCROW_ADDRESS,
-        abi: escrowABI,
-        functionName: "releaseFunds",
-        args: [],
-      });
+      await writeContractAsync({ address: ESCROW_ADDRESS, abi: escrowABI, functionName: "releaseFunds", args: [] });
       setStatus("Success! Funds released to freelancer.");
       setSummary(`✅ Transaction Complete: You released ${escrowAmount} USDC to the freelancer.`);
     } catch (error: any) {
       console.error(error);
-      const reason = error.shortMessage || error.message;
-      setStatus(`Transaction failed: ${reason}`);
+      setStatus(`Transaction failed: ${error.shortMessage || error.message}`);
     } finally {
       setLoading(false);
     }
@@ -127,17 +108,11 @@ export default function EscrowPage() {
     setLoading(true);
     setStatus("Awaiting signature to reject work...");
     try {
-      await writeContractAsync({
-        address: ESCROW_ADDRESS,
-        abi: escrowABI,
-        functionName: "rejectWork",
-        args: [],
-      });
+      await writeContractAsync({ address: ESCROW_ADDRESS, abi: escrowABI, functionName: "rejectWork", args: [] });
       setStatus("Work rejected. Dispute started.");
     } catch (error: any) {
       console.error(error);
-      const reason = error.shortMessage || error.message;
-      setStatus(`Transaction failed: ${reason}`);
+      setStatus(`Transaction failed: ${error.shortMessage || error.message}`);
     } finally {
       setLoading(false);
     }
@@ -147,20 +122,14 @@ export default function EscrowPage() {
     setLoading(true);
     setStatus("Awaiting signature to accept split...");
     try {
-      await writeContractAsync({
-        address: ESCROW_ADDRESS,
-        abi: escrowABI,
-        functionName: "acceptSplit",
-        args: [],
-      });
+      await writeContractAsync({ address: ESCROW_ADDRESS, abi: escrowABI, functionName: "acceptSplit", args: [] });
       const freelancerGets = (escrowAmount * proposedSplit) / 100;
       const clientGets = escrowAmount - freelancerGets;
       setStatus("Success! Split accepted and funds distributed.");
       setSummary(`✅ Split Executed: You received ${clientGets} USDC back. Freelancer received ${freelancerGets} USDC.`);
     } catch (error: any) {
       console.error(error);
-      const reason = error.shortMessage || error.message;
-      setStatus(`Transaction failed: ${reason}`);
+      setStatus(`Transaction failed: ${error.shortMessage || error.message}`);
     } finally {
       setLoading(false);
     }
@@ -170,20 +139,14 @@ export default function EscrowPage() {
     setLoading(true);
     setStatus("Awaiting signature to cancel escrow...");
     try {
-      await writeContractAsync({
-        address: ESCROW_ADDRESS,
-        abi: escrowABI,
-        functionName: "requestCancel",
-        args: [],
-      });
+      await writeContractAsync({ address: ESCROW_ADDRESS, abi: escrowABI, functionName: "requestCancel", args: [] });
       const refund = escrowAmount * 0.95;
       const fee = escrowAmount * 0.05;
       setStatus("Escrow cancelled. Funds refunded (minus fee).");
       setSummary(`✅ Escrow Cancelled: You received ${refund} USDC back. Cancellation fee: ${fee} USDC.`);
     } catch (error: any) {
       console.error(error);
-      const reason = error.shortMessage || error.message;
-      setStatus(`Transaction failed: ${reason}`);
+      setStatus(`Transaction failed: ${error.shortMessage || error.message}`);
     } finally {
       setLoading(false);
     }
@@ -199,19 +162,14 @@ export default function EscrowPage() {
       const response = await fetch(`http://localhost:3001/api/ipfs/${ipfsHash}`);
       if (!response.ok) throw new Error("Backend failed to fetch IPFS file.");
       const json = await response.json();
-      
       const encryptedAesKeyObject = EthCrypto.cipher.parse(json.encryptedAesKey);
       const aesKey = await EthCrypto.decryptWithPrivateKey(trimmedKey, encryptedAesKeyObject);
       const decryptedBase64 = CryptoJS.AES.decrypt(json.encryptedFile, aesKey).toString(CryptoJS.enc.Utf8);
-      
       const byteCharacters = atob(decryptedBase64);
       const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
+      for (let i = 0; i < byteCharacters.length; i++) byteNumbers[i] = byteCharacters.charCodeAt(i);
       const byteArray = new Uint8Array(byteNumbers);
       const blob = new Blob([byteArray], { type: "application/octet-stream" });
-      
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -230,12 +188,7 @@ export default function EscrowPage() {
   const mintTestUsdc = async () => {
     setLoading(true);
     try {
-      await writeContractAsync({
-        address: USDC_ADDRESS,
-        abi: usdcABI,
-        functionName: "mint",
-        args: [address, parseUnits("1000", 18)],
-      });
+      await writeContractAsync({ address: USDC_ADDRESS, abi: usdcABI, functionName: "mint", args: [address, parseUnits("1000", 18)] });
       alert("Minted 1000 test USDC!");
     } catch (e: any) {
       console.error(e);
@@ -255,17 +208,21 @@ export default function EscrowPage() {
     );
   }
 
+  const Spinner = () => (
+    <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+    </svg>
+  );
+
   return (
     <main className="w-full max-w-2xl mx-auto py-8">
       <h1 className="text-2xl font-bold mb-8 tracking-tight">Escrow Details</h1>
 
       {!escrowData ? (
-        <div className="text-center py-16 rounded-xl border border-dashed border-white/10">
-          <p className="text-white/40">Loading link details...</p>
-        </div>
+        <div className="text-center py-16 rounded-xl border border-dashed border-white/10"><p className="text-white/40">Loading link details...</p></div>
       ) : (
         <div className="space-y-6">
-          {/* Details Card */}
           <div className="rounded-xl border border-white/5 bg-white/5 p-6">
             <div className="grid grid-cols-1 gap-4 text-sm">
               <div>
@@ -283,24 +240,17 @@ export default function EscrowPage() {
             </div>
           </div>
 
-          {/* Pending State (0) */}
           {stateNum === 0 && (
             <div className="space-y-3">
               <button onClick={handleFund} disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
-                {loading ? (
-                  <>
-                    <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                    Processing...
-                  </>
-                ) : "Fund Escrow (Lock USDC)"}
+                {loading ? (<><Spinner /> Processing...</>) : "Fund Escrow (Lock USDC)"}
               </button>
-              <button onClick={mintTestUsdc} disabled={loading} className="w-full bg-white/5 hover:bg-white/10 text-white/70 text-sm py-2.5 rounded-lg transition-colors">
-                Need test USDC? Click to mint 1000
+              <button onClick={mintTestUsdc} disabled={loading} className="w-full bg-white/5 hover:bg-white/10 text-white/70 text-sm py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
+                {loading ? (<><Spinner /> Minting...</>) : "Need test USDC? Click to mint 1000"}
               </button>
             </div>
           )}
 
-          {/* Funded State (1) */}
           {stateNum === 1 && (
             <div className="space-y-4">
               <div className="rounded-xl border border-blue-500/30 bg-blue-900/10 p-4 text-center">
@@ -310,16 +260,15 @@ export default function EscrowPage() {
                 </div>
                 <p className="text-sm text-white/50">The freelancer has not submitted work yet. You can cancel early for a 5% fee.</p>
               </div>
-              <button onClick={mintTestUsdc} disabled={loading} className="w-full bg-white/5 hover:bg-white/10 text-white/70 text-sm py-2.5 rounded-lg transition-colors">
-                Need test USDC? Click to mint 1000
+              <button onClick={mintTestUsdc} disabled={loading} className="w-full bg-white/5 hover:bg-white/10 text-white/70 text-sm py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
+                {loading ? (<><Spinner /> Minting...</>) : "Need test USDC? Click to mint 1000"}
               </button>
-              <button onClick={handleEarlyCancel} disabled={loading} className="w-full bg-red-900/20 hover:bg-red-900/40 text-red-400 border border-red-500/30 text-sm py-2.5 rounded-lg transition-colors">
-                {loading ? "Processing..." : "Request Early Cancellation (5% Fee)"}
+              <button onClick={handleEarlyCancel} disabled={loading} className="w-full bg-red-900/20 hover:bg-red-900/40 text-red-400 border border-red-500/30 text-sm py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
+                {loading ? (<><Spinner /> Processing...</>) : "Request Early Cancellation (5% Fee)"}
               </button>
             </div>
           )}
 
-          {/* Submitted State (2) */}
           {stateNum === 2 && (
             <div className="space-y-6">
               <div className="rounded-xl border border-purple-500/30 bg-purple-900/10 p-6">
@@ -328,8 +277,6 @@ export default function EscrowPage() {
                   <h3 className="font-bold text-purple-400">Work Submitted!</h3>
                 </div>
                 <p className="text-xs text-white/50 mb-4 break-all font-mono">IPFS Hash: {ipfsHash}</p>
-                
-                {/* Client Warning Timer */}
                 <div className="mb-6 p-3 bg-black/30 rounded-lg border border-white/5">
                   <p className="text-xs text-white/50 mb-2">⚠️ Action Required</p>
                   {remainingTime > 0 ? (
@@ -340,37 +287,25 @@ export default function EscrowPage() {
                     <p className="text-green-400 font-medium text-sm">Time lock expired! The freelancer can now claim funds.</p>
                   )}
                 </div>
-                
                 <div className="p-4 bg-black/30 rounded-lg border border-white/10">
                   <p className="text-sm text-white/70 mb-2">Enter Decryption Key</p>
-                  <input 
-                    type="text" 
-                    value={decryptionKey}
-                    onChange={(e) => setDecryptionKey(e.target.value)}
-                    className="w-full px-3 py-2 bg-black/40 rounded border border-white/10 text-xs text-white/80 focus:outline-none focus:border-blue-500 mb-4"
-                    placeholder="0x..."
-                  />
-                  <button 
-                    onClick={handleDecryptFile}
-                    disabled={ipfsLoading || !decryptionKey}
-                    className="w-full bg-green-600 hover:bg-green-700 text-white text-sm py-2.5 rounded-lg transition-colors disabled:opacity-50"
-                  >
-                    {ipfsLoading ? "Fetching & Decrypting..." : "Decrypt & Download Original File"}
+                  <input type="text" value={decryptionKey} onChange={(e) => setDecryptionKey(e.target.value)} className="w-full px-3 py-2 bg-black/40 rounded border border-white/10 text-xs text-white/80 focus:outline-none focus:border-blue-500 mb-4" placeholder="0x..." />
+                  <button onClick={handleDecryptFile} disabled={ipfsLoading || !decryptionKey} className="w-full bg-green-600 hover:bg-green-700 text-white text-sm py-2.5 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                    {ipfsLoading ? (<><Spinner /> Fetching & Decrypting...</>) : "Decrypt & Download Original File"}
                   </button>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <button onClick={handleRelease} disabled={loading} className="bg-green-600 hover:bg-green-700 text-white font-medium py-2.5 rounded-lg transition-colors disabled:opacity-50">
-                  {loading ? "Processing..." : "Approve & Release"}
+                <button onClick={handleRelease} disabled={loading} className="bg-green-600 hover:bg-green-700 text-white font-medium py-2.5 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                  {loading ? (<><Spinner /> Processing...</>) : "Approve & Release"}
                 </button>
-                <button onClick={handleReject} disabled={loading} className="bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 rounded-lg transition-colors disabled:opacity-50">
-                  {loading ? "Processing..." : "Reject Work"}
+                <button onClick={handleReject} disabled={loading} className="bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                  {loading ? (<><Spinner /> Processing...</>) : "Reject Work"}
                 </button>
               </div>
             </div>
           )}
 
-          {/* Disputed State (4) */}
           {stateNum === 4 && (
             <div className="space-y-4">
               <div className="rounded-xl border border-red-500/30 bg-red-900/10 p-6">
@@ -385,14 +320,13 @@ export default function EscrowPage() {
                 )}
               </div>
               {proposedSplit > 0 && (
-                <button onClick={handleAcceptSplit} disabled={loading} className="w-full bg-orange-600 hover:bg-orange-700 text-white font-medium py-2.5 rounded-lg transition-colors disabled:opacity-50">
-                  {loading ? "Processing..." : `Accept ${proposedSplit}% Split`}
+                <button onClick={handleAcceptSplit} disabled={loading} className="w-full bg-orange-600 hover:bg-orange-700 text-white font-medium py-2.5 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                  {loading ? (<><Spinner /> Processing...</>) : `Accept ${proposedSplit}% Split`}
                 </button>
               )}
             </div>
           )}
 
-          {/* Released State (3) */}
           {stateNum === 3 && (
             <div className="rounded-xl border border-green-500/30 bg-green-900/10 p-8 text-center">
               <div className="h-12 w-12 rounded-full bg-green-500/20 mx-auto mb-4 flex items-center justify-center">
@@ -403,7 +337,6 @@ export default function EscrowPage() {
             </div>
           )}
 
-          {/* Cancelled State (5) */}
           {stateNum === 5 && escrowAmount > 0 && (
             <div className="rounded-xl border border-white/10 bg-white/5 p-8 text-center space-y-6">
               <div className="h-12 w-12 rounded-full bg-white/10 mx-auto flex items-center justify-center">
@@ -426,12 +359,9 @@ export default function EscrowPage() {
             </div>
           )}
 
-          {/* Status & Summary */}
           {status && <p className="text-sm text-white/50 text-center mt-4">{status}</p>}
           {summary && (
-            <div className="p-4 bg-blue-900/20 border border-blue-500/30 rounded-lg text-center text-sm text-blue-200 font-mono">
-              {summary}
-            </div>
+            <div className="p-4 bg-blue-900/20 border border-blue-500/30 rounded-lg text-center text-sm text-blue-200 font-mono">{summary}</div>
           )}
         </div>
       )}
