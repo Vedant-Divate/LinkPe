@@ -341,12 +341,23 @@ export default function EscrowPage() {
                 <p className="text-white/50 mt-2">The freelancer has been paid.</p>
               </div>
               <div className="pt-6 border-t border-white/10">
-                <p className="text-white/50 text-sm mb-1">Amount Released</p>
-                <p className="text-2xl font-bold text-white/80">
+                <p className="text-white/50 text-sm mb-1">Released to Freelancer</p>
+                <p className="text-2xl font-bold text-green-400">
                   {proposedSplit > 0 ? (escrowAmount * proposedSplit / 100).toFixed(2) : escrowAmount} 
                   <span className="text-lg text-white/50"> USDC</span>
                 </p>
               </div>
+              
+              {/* Show refund amount if it was a split */}
+              {proposedSplit > 0 && (
+                <div className="pt-4 border-t border-white/10">
+                  <p className="text-white/50 text-sm mb-1">Refunded to You</p>
+                  <p className="text-2xl font-bold text-yellow-400">
+                    {(escrowAmount - (escrowAmount * proposedSplit / 100)).toFixed(2)} 
+                    <span className="text-lg text-white/50"> USDC</span>
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
