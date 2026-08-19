@@ -4,14 +4,14 @@ import { useAccount, useWriteContract, useReadContract } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { escrowABI } from "@/lib/abi";
 import { encryptAndUploadFile } from "@/lib/ipfs";
-import  EthCrypto  from "eth-crypto";
+import EthCrypto from "eth-crypto";
 
 const ESCROW_ADDRESS = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
-const TIME_LOCK_SECONDS = 604800; // 2 minutes for local testing
-
+const TIME_LOCK_SECONDS = 604800; // 7 days
 
 export default function Home() {
   const [splitPercent, setSplitPercent] = useState("");
+  const [activeTab, setActiveTab] = useState("create");
   const { address, isConnected } = useAccount();
   const { writeContractAsync } = useWriteContract();
 
@@ -25,6 +25,7 @@ export default function Home() {
   const [txStatus, setTxStatus] = useState("");
   const [remainingTime, setRemainingTime] = useState(0);
   const [generatedPrivateKey, setGeneratedPrivateKey] = useState("");
+  const [copied, setCopied] = useState(false);
 
   // Read the active escrow state from the smart contract
   const { data: contractState } = useReadContract({
@@ -51,7 +52,6 @@ export default function Home() {
         const diff = expiryTime - currentTime;
         setRemainingTime(diff > 0 ? diff : 0);
       }, 1000);
-
       return () => clearInterval(timer);
     }
   }, [stateNum, submissionTimestamp]);
@@ -64,11 +64,19 @@ export default function Home() {
     }
   }, []);
 
+  // Auto-switch to active tab when state changes
+  useEffect(() => {
+    if (stateNum > 0 && stateNum !== 5) {
+      setActiveTab("active");
+    } else if (stateNum === 0 || stateNum === 5) {
+      setActiveTab("create");
+    }
+  }, [stateNum]);
+
   const generateLink = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setLink("");
-
     try {
       const response = await fetch("http://localhost:3001/api/escrow", {
         method: "POST",
@@ -79,7 +87,6 @@ export default function Home() {
           description: description,
         }),
       });
-
       const data = await response.json();
       if (data.id) {
         setLink(`http://localhost:3000/escrow/${data.id}`);
@@ -94,10 +101,8 @@ export default function Home() {
   const handleFileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!file) return alert("Please select a file first.");
-    
     setSubmitting(true);
     setTxStatus("Encrypting file & uploading to IPFS...");
-
     try {
       const demoClientIdentity = EthCrypto.createIdentity();
       setGeneratedPrivateKey(demoClientIdentity.privateKey);
@@ -105,7 +110,6 @@ export default function Home() {
       const clientPublicKey = demoClientIdentity.publicKey;
 
       const ipfsHash = await encryptAndUploadFile(file, clientPublicKey);
-      
       setTxStatus("Awaiting Rabby signature to submit work...");
       
       await writeContractAsync({
@@ -114,7 +118,6 @@ export default function Home() {
         functionName: "submitWork",
         args: [ipfsHash],
       });
-
       setTxStatus("Success! Work submitted. 7-day timer started.");
     } catch (error) {
       console.error(error);
@@ -134,12 +137,10 @@ export default function Home() {
         functionName: "autoReleaseFunds",
         args: [],
       });
-      setTxStatus("Success! Funds auto-released.");
       setTxStatus(`✅ Success! You received ${escrowAmount} USDC.`);
       localStorage.removeItem("linkpe_demo_private_key");
     } catch (error: any) {
       console.error(error);
-      // Get the actual reason from the blockchain
       const reason = error.shortMessage || error.message;
       setTxStatus("Transaction failed. Time lock may not be expired yet.");
     } finally {
@@ -157,7 +158,6 @@ export default function Home() {
         functionName: "proposeSplit",
         args: [Number(splitPercent)],
       });
-      setTxStatus(`Success! Proposed ${splitPercent}% split to client.`);
       const freelancerGets = (escrowAmount * Number(splitPercent)) / 100;
       setTxStatus(`✅ Success! Proposed ${splitPercent}% split. You will receive ${freelancerGets} USDC if accepted.`);
     } catch (error: any) {
@@ -171,192 +171,207 @@ export default function Home() {
 
   if (!isConnected) {
     return (
-      <main className="flex min-h-screen flex-col items-center py-12">
-        {/* <div className="absolute top-8 right-8">
+      <main className="flex min-h-[calc(100vh-80px)] flex-col items-center justify-center text-center">
+        <div className="mb-8 h-16 w-16 rounded-2xl bg-gradient-to-tr from-blue-500 to-purple-600 animate-pulse" />
+        <h1 className="text-4xl font-bold tracking-tight mb-3">Welcome to LinkPe</h1>
+        <p className="text-white/50 max-w-md">Connect your wallet to start creating trustless, encrypted freelance escrows.</p>
+        <div className="mt-8">
           <ConnectButton />
-        </div> */}
-        <h1 className="text-4xl font-bold mb-2">LinkPe</h1>
-        <p className="mb-8 text-gray-400">Freelancer Dashboard</p>
-        <p className="text-yellow-400 text-lg">⚠️ Please connect your wallet to generate an escrow link.</p>
+        </div>
       </main>
     );
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center p-24 bg-gray-900 text-white">
-      <div className="absolute top-8 right-8">
-        <ConnectButton />
+    <main className="w-full">
+      {/* Stats Header */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div className="rounded-xl border border-white/5 bg-white/5 p-4">
+          <p className="text-sm text-white/50">Total Earned</p>
+          <p className="text-2xl font-bold mt-1">{stateNum === 3 ? escrowAmount : 0} <span className="text-sm text-white/50">USDC</span></p>
+        </div>
+        <div className="rounded-xl border border-white/5 bg-white/5 p-4">
+          <p className="text-sm text-white/50">Active Escrows</p>
+          <p className="text-2xl font-bold mt-1">{stateNum > 0 && stateNum !== 5 ? 1 : 0}</p>
+        </div>
+        <div className="rounded-xl border border-white/5 bg-white/5 p-4">
+          <p className="text-sm text-white/50">Open Disputes</p>
+          <p className="text-2xl font-bold mt-1 text-red-400">{stateNum === 4 ? 1 : 0}</p>
+        </div>
       </div>
 
-      <h1 className="text-4xl font-bold mb-2">LinkPe</h1>
-      <p className="mb-8 text-gray-400">Freelancer Dashboard</p>
-
-      <div className="w-full max-w-md bg-gray-800 p-8 rounded-lg shadow-lg mb-8">
-        <h2 className="text-xl font-bold mb-4">Generate New Escrow</h2>
-        <form onSubmit={generateLink}>
-          <div className="mb-4">
-            <label className="block text-sm font-medium mb-2">Amount (USDC)</label>
-            <input
-              type="number"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:border-blue-500"
-              placeholder="e.g. 500"
-              required
-            />
-          </div>
-          <div className="mb-6">
-            <label className="block text-sm font-medium mb-2">Milestone Description</label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:border-blue-500"
-              placeholder="e.g. Build a landing page"
-              required
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors disabled:opacity-50"
-          >
-            {loading ? "Generating..." : "Generate Escrow Link"}
-          </button>
-        </form>
-        {link && (
-          <div className="mt-4 p-4 bg-green-900/50 border border-green-500 rounded-lg text-center">
-            <p className="text-green-400 font-bold mb-2">Link Generated!</p>
-            <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline break-all">
-              {link}
-            </a>
-          </div>
-        )}
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-white/10 mb-8">
+        <button 
+          onClick={() => setActiveTab("create")}
+          className={`px-4 py-2 text-sm font-medium transition-colors ${activeTab === "create" ? "text-white border-b-2 border-blue-500" : "text-white/50 hover:text-white"}`}
+        >
+          Create Escrow
+        </button>
+        <button 
+          onClick={() => setActiveTab("active")}
+          className={`px-4 py-2 text-sm font-medium transition-colors ${activeTab === "active" ? "text-white border-b-2 border-blue-500" : "text-white/50 hover:text-white"}`}
+        >
+          Active Escrow
+        </button>
       </div>
 
-      {/* Active Escrow Tracker */}
-      <div className="w-full max-w-md bg-gray-800 p-8 rounded-lg shadow-lg mb-8">
-        <h2 className="text-xl font-bold mb-4">Active Escrow Status</h2>
-        
-        {stateNum === -1 && <p className="text-gray-400">Loading contract state...</p>}
-        {stateNum === 0 && <p className="text-gray-400">No active escrow. Generate a link and have a client fund it.</p>}
-        
-        {stateNum === 1 && (
-          <div className="bg-blue-900/50 border border-blue-500 p-4 rounded">
-            <p className="text-blue-400 font-bold mb-2">Funded by Client!</p>
-            <p className="text-xs text-gray-300 break-all">Client Address: {clientAddr}</p>
-            <p className="text-sm text-gray-400 mt-2">Upload your work below to start the approval timer.</p>
-          </div>
-        )}
-
-        {stateNum === 2 && (
-          <div className="bg-purple-900/50 border border-purple-500 p-4 rounded">
-            <p className="text-purple-400 font-bold mb-2">Work Submitted!</p>
-            <p className="text-sm text-gray-400 mb-4">Waiting for client to approve. 7-day auto-release timer is active.</p>
-            
-            {/* Timer UI */}
-            {remainingTime > 0 ? (
-              <p className="text-sm text-yellow-400 mb-4 font-mono">
-                Auto-Release available in: {Math.floor(remainingTime / 60)}m {remainingTime % 60}s
-              </p>
-            ) : (
-              <p className="text-sm text-green-400 mb-4 font-bold">
-                Time lock expired! You can claim your funds.
-              </p>
-            )}
-
-            {/* Decryption Key Box for the Client */}
-            {generatedPrivateKey && (
-              <div className="mt-4 p-4 bg-gray-800 border border-dashed border-gray-500 rounded">
-                <p className="text-sm text-yellow-400 font-bold mb-2">Client Decryption Key:</p>
-                <p className="text-xs text-gray-400 mb-2">
-                  Send this key to the client (or paste it into the client dashboard yourself). 
-                  Without this, the file cannot be decrypted.
-                </p>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={generatedPrivateKey}
-                    readOnly
-                    className="w-full px-2 py-1 bg-gray-700 rounded text-xs text-gray-300 break-all"
-                  />
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(generatedPrivateKey);
-                      alert("Private key copied to clipboard!");
-                    }}
-                    className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-1 px-3 rounded whitespace-nowrap"
-                  >
-                    Copy
-                  </button>
-                </div>
+      {/* Tab Content */}
+      {activeTab === "create" && (
+        <div className="max-w-2xl mx-auto">
+          <div className="rounded-xl border border-white/5 bg-white/5 p-8">
+            <h2 className="text-xl font-bold mb-6">Create New Escrow</h2>
+            <form onSubmit={generateLink} className="space-y-5">
+              <div>
+                <label className="block text-xs font-medium text-white/70 mb-2">Amount (USDC)</label>
+                <input
+                  type="number"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  className="w-full px-3 py-2.5 bg-black/30 rounded-lg border border-white/10 focus:outline-none focus:border-blue-500 transition-colors"
+                  placeholder="e.g. 500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-white/70 mb-2">Milestone Description</label>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  className="w-full px-3 py-2.5 bg-black/30 rounded-lg border border-white/10 focus:outline-none focus:border-blue-500 transition-colors"
+                  placeholder="e.g. Build a landing page"
+                  required
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {loading ? "Generating..." : "Generate Escrow Link"}
+              </button>
+            </form>
+            {link && (
+              <div className="mt-6 p-4 bg-green-900/20 border border-green-500/30 rounded-lg text-center">
+                <p className="text-green-400 text-sm font-medium mb-2">Link Generated!</p>
+                <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline break-all text-sm">
+                  {link}
+                </a>
               </div>
             )}
-
-            <button
-              onClick={handleAutoRelease}
-              disabled={submitting || remainingTime > 0}
-              className="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-4"
-            >
-              {submitting ? "Processing..." : "Claim Auto-Release"}
-            </button>
-            {txStatus && <p className="text-center text-sm text-gray-300 mt-4">{txStatus}</p>}
           </div>
-        )}
-
-        {stateNum === 3 && (
-          <div className="bg-green-900/50 border border-green-500 p-4 rounded">
-            <p className="text-green-400 font-bold mb-2">Funds Released!</p>
-            <p className="text-sm text-gray-400">This escrow is complete. You can generate a new one.</p>
-          </div>
-        )}
-      </div>
-
-      {stateNum === 4 && (
-        <div className="bg-red-900/50 border border-red-500 p-4 rounded">
-          <p className="text-red-400 font-bold mb-2">Work Rejected! (Disputed)</p>
-          <p className="text-sm text-gray-400 mb-4">The client rejected the work. Propose a partial refund split to resolve the dispute.</p>
-          <div className="flex gap-4">
-            <input
-              type="number"
-              value={splitPercent}
-              onChange={(e) => setSplitPercent(e.target.value)}
-              className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:outline-none focus:border-blue-500"
-              placeholder="e.g. 50 (for 50%)"
-            />
-            <button
-              onClick={handleProposeSplit}
-              disabled={submitting || !splitPercent}
-              className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded transition-colors disabled:opacity-50 whitespace-nowrap"
-            >
-              {submitting ? "Processing..." : "Propose Split"}
-            </button>
-          </div>
-          {txStatus && <p className="text-center text-sm text-gray-300 mt-4">{txStatus}</p>}
         </div>
       )}
 
-      {/* Show Submit Work form ONLY if state is 1 (Funded) */}
-      {stateNum === 1 && (
-        <div className="w-full max-w-md bg-gray-800 p-8 rounded-lg shadow-lg">
-          <h2 className="text-xl font-bold mb-4">Submit Work</h2>
-          <p className="text-sm text-gray-400 mb-4">Upload the deliverable. File will be encrypted before IPFS upload.</p>
-          
-          <form onSubmit={handleFileSubmit}>
-            <input 
-              type="file" 
-              onChange={(e) => setFile(e.target.files?.[0] || null)}
-              className="w-full mb-4 text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-              required
-            />
-            <button
-              type="submit"
-              disabled={submitting}
-              className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded transition-colors disabled:opacity-50"
-            >
-              {submitting ? "Processing..." : "Encrypt & Submit Work"}
-            </button>
-            {txStatus && <p className="text-center text-sm text-gray-300 mt-4">{txStatus}</p>}
-          </form>
+      {activeTab === "active" && (
+        <div className="max-w-2xl mx-auto space-y-6">
+          {/* No Active Escrow */}
+          {stateNum <= 0 && (
+            <div className="text-center py-16 rounded-xl border border-dashed border-white/10">
+              <p className="text-white/40">No active escrows. Create one to get started.</p>
+            </div>
+          )}
+
+          {/* Funded State */}
+          {stateNum === 1 && (
+            <div className="rounded-xl border border-blue-500/30 bg-blue-900/10 p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="h-2 w-2 rounded-full bg-blue-400 animate-pulse" />
+                <h3 className="font-bold text-blue-400">Funded by Client!</h3>
+              </div>
+              <p className="text-sm text-white/60 mb-4">Client Address: {clientAddr}</p>
+              
+              <div className="border-t border-white/10 pt-6 mt-6">
+                <h4 className="font-medium mb-4">Submit Encrypted Work</h4>
+                <form onSubmit={handleFileSubmit} className="space-y-4">
+                  <input 
+                    type="file" 
+                    onChange={(e) => setFile(e.target.files?.[0] || null)}
+                    className="w-full text-sm text-white/70 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-500/20 file:text-blue-300 hover:file:bg-blue-500/30 cursor-pointer"
+                    required
+                  />
+                  <button type="submit" disabled={submitting} className="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-2.5 rounded-lg transition-colors disabled:opacity-50">
+                    {submitting ? "Processing..." : "Encrypt & Submit Work"}
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Submitted State */}
+          {stateNum === 2 && (
+            <div className="rounded-xl border border-purple-500/30 bg-purple-900/10 p-6">
+              <h3 className="font-bold text-purple-400 mb-4">Work Submitted!</h3>
+              
+              <div className="mb-6 p-3 bg-black/30 rounded-lg border border-white/5">
+                <p className="text-xs text-white/50 mb-2">Auto-Release Timer</p>
+                {remainingTime > 0 ? (
+                  <p className="font-mono text-yellow-400">{Math.floor(remainingTime / 60)}m {remainingTime % 60}s</p>
+                ) : (
+                  <p className="text-green-400 font-medium">Time lock expired!</p>
+                )}
+              </div>
+
+              {generatedPrivateKey && (
+                <div className="mb-6 p-4 bg-yellow-900/10 border border-yellow-500/30 rounded-lg">
+                  <p className="text-sm text-yellow-400 font-medium mb-2">Client Decryption Key</p>
+                  <div className="flex gap-2">
+                    <input value={generatedPrivateKey} readOnly className="flex-1 px-2 py-1.5 bg-black/40 rounded text-xs text-white/70 border border-white/5" />
+                    <button 
+                      onClick={() => { navigator.clipboard.writeText(generatedPrivateKey); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+                      className="px-3 bg-white/10 hover:bg-white/20 rounded text-xs font-medium transition-colors"
+                    >
+                      {copied ? "Copied!" : "Copy"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <button 
+                onClick={handleAutoRelease}
+                disabled={submitting || remainingTime > 0}
+                className="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-medium py-2.5 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {submitting ? "Processing..." : "Claim Auto-Release"}
+              </button>
+            </div>
+          )}
+
+          {/* Disputed State */}
+          {stateNum === 4 && (
+            <div className="rounded-xl border border-red-500/30 bg-red-900/10 p-6">
+              <h3 className="font-bold text-red-400 mb-4">Work Rejected! (Disputed)</h3>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  value={splitPercent}
+                  onChange={(e) => setSplitPercent(e.target.value)}
+                  className="flex-1 px-3 py-2.5 bg-black/30 rounded-lg border border-white/10 focus:outline-none focus:border-blue-500"
+                  placeholder="e.g. 50 (for 50%)"
+                />
+                <button 
+                  onClick={handleProposeSplit}
+                  disabled={submitting || !splitPercent}
+                  className="bg-orange-600 hover:bg-orange-700 text-white font-medium py-2.5 px-4 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {submitting ? "Processing..." : "Propose Split"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Released State */}
+          {stateNum === 3 && (
+            <div className="text-center py-16 rounded-xl border border-green-500/30 bg-green-900/10">
+              <div className="h-12 w-12 rounded-full bg-green-500/20 mx-auto mb-4 flex items-center justify-center">
+                <svg className="h-6 w-6 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+              </div>
+              <h3 className="text-xl font-bold text-green-400">Funds Released!</h3>
+              <p className="text-white/50 mt-2">This escrow is complete. You can generate a new one.</p>
+            </div>
+          )}
+
+          {txStatus && <p className="text-sm text-white/50 text-center mt-4">{txStatus}</p>}
         </div>
       )}
     </main>
