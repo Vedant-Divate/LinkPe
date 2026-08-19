@@ -56,6 +56,14 @@ export default function Home() {
     }
   }, [stateNum, submissionTimestamp]);
 
+  // Load the private key from local storage on page load
+  useEffect(() => {
+    const savedKey = localStorage.getItem("linkpe_demo_private_key");
+    if (savedKey) {
+      setGeneratedPrivateKey(savedKey);
+    }
+  }, []);
+
   const generateLink = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -93,6 +101,7 @@ export default function Home() {
     try {
       const demoClientIdentity = EthCrypto.createIdentity();
       setGeneratedPrivateKey(demoClientIdentity.privateKey);
+      localStorage.setItem("linkpe_demo_private_key", demoClientIdentity.privateKey);
       const clientPublicKey = demoClientIdentity.publicKey;
 
       const ipfsHash = await encryptAndUploadFile(file, clientPublicKey);
@@ -127,6 +136,7 @@ export default function Home() {
       });
       setTxStatus("Success! Funds auto-released.");
       setTxStatus(`✅ Success! You received ${escrowAmount} USDC.`);
+      localStorage.removeItem("linkpe_demo_private_key");
     } catch (error: any) {
       console.error(error);
       // Get the actual reason from the blockchain
@@ -243,6 +253,17 @@ export default function Home() {
             <p className="text-purple-400 font-bold mb-2">Work Submitted!</p>
             <p className="text-sm text-gray-400 mb-4">Waiting for client to approve. 7-day auto-release timer is active.</p>
             
+            {/* Timer UI */}
+            {remainingTime > 0 ? (
+              <p className="text-sm text-yellow-400 mb-4 font-mono">
+                Auto-Release available in: {Math.floor(remainingTime / 60)}m {remainingTime % 60}s
+              </p>
+            ) : (
+              <p className="text-sm text-green-400 mb-4 font-bold">
+                Time lock expired! You can claim your funds.
+              </p>
+            )}
+
             {/* Decryption Key Box for the Client */}
             {generatedPrivateKey && (
               <div className="mt-4 p-4 bg-gray-800 border border-dashed border-gray-500 rounded">

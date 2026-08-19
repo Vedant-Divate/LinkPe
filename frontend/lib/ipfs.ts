@@ -1,5 +1,5 @@
 import axios from "axios";
-import EthCrypto from "eth-crypto";
+import  EthCrypto  from "eth-crypto";
 import CryptoJS from "crypto-js";
 
 const PINATA_API_KEY = process.env.NEXT_PUBLIC_PINATA_API_KEY;
@@ -32,6 +32,7 @@ export async function encryptAndUploadFile(file: File, clientPublicKey: string) 
     },
   });
 
+  console.log("Uploading to Pinata...");
   const response = await axios.post("https://api.pinata.cloud/pinning/pinJSONToIPFS", payload, {
     headers: {
       "Content-Type": "application/json",
@@ -40,6 +41,12 @@ export async function encryptAndUploadFile(file: File, clientPublicKey: string) 
     },
   });
 
-  // Return the IPFS Hash (Qm...)
+  // VALIDATION CHECK
+  if (!response.data || !response.data.IpfsHash) {
+    console.error("Pinata API Response:", response.data);
+    throw new Error("Pinata did not return a valid IPFS hash. Check your API keys in the .env file.");
+  }
+
+  console.log("✅ Pinata upload successful! Hash:", response.data.IpfsHash);
   return response.data.IpfsHash;
 }

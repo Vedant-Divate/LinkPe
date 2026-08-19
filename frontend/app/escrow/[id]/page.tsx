@@ -182,7 +182,7 @@ export default function EscrowPage() {
     setIpfsLoading(true);
     setStatus("Fetching encrypted payload from IPFS...");
     try {
-      const response = await fetch(`https://gateway.pinata.cloud/ipfs/${ipfsHash}`);
+      const response = await fetch(`https://ipfs.io/ipfs/${ipfsHash}`);
       const json = await response.json();
     
       // Create and download the file
@@ -206,21 +206,45 @@ export default function EscrowPage() {
   const handleDecryptFile = async () => {
     if (!ipfsHash) return alert("No IPFS hash found!");
     if (!decryptionKey) return alert("Please enter the private key.");
-  
+    
     setIpfsLoading(true);
     setStatus("Fetching and decrypting file...");
     try {
-      // 1. Fetch the encrypted JSON from IPFS
-      const response = await fetch(`https://gateway.pinata.cloud/ipfs/${ipfsHash}`);
+      const trimmedKey = decryptionKey.trim();
+      
+      // 1. Fetch the encrypted JSON from IPFS using multiple gateways
+      const gateways = [
+        `https://w3s.link/ipfs/${ipfsHash}`,
+        `https://gateway.pinata.cloud/ipfs/${ipfsHash}`,
+        `https://cloudflare-ipfs.com/ipfs/${ipfsHash}`,
+        `https://ipfs.io/ipfs/${ipfsHash}`
+      ];
+      
+      let response;
+      for (let i = 0; i < gateways.length; i++) {
+        try {
+          setStatus(`Fetching from gateway ${i + 1}...`);
+          response = await fetch(gateways[i]);
+          if (response.ok) break; // Stop if successful
+        } catch (e) {
+          console.log(`Gateway ${gateways[i]} failed, trying next...`);
+        }
+      }
+      
+      if (!response || !response.ok) {
+        throw new Error("All IPFS gateways failed to fetch the file.");
+      }
+      
       const json = await response.json();
-    
+      console.log("Fetched IPFS payload:", json);
+      
       // 2. Decrypt the AES key using the Client's Private Key
       const encryptedAesKeyObject = EthCrypto.cipher.parse(json.encryptedAesKey);
-      const aesKey = await EthCrypto.decryptWithPrivateKey(decryptionKey, encryptedAesKeyObject);
-    
+      const aesKey = await EthCrypto.decryptWithPrivateKey(trimmedKey, encryptedAesKeyObject);
+      
       // 3. Decrypt the file using the decrypted AES key
       const decryptedBase64 = CryptoJS.AES.decrypt(json.encryptedFile, aesKey).toString(CryptoJS.enc.Utf8);
-
+      
       // 4. Convert Base64 back to a downloadable file
       const byteCharacters = atob(decryptedBase64);
       const byteNumbers = new Array(byteCharacters.length);
@@ -229,19 +253,19 @@ export default function EscrowPage() {
       }
       const byteArray = new Uint8Array(byteNumbers);
       const blob = new Blob([byteArray], { type: "application/octet-stream" });
-    
+      
       // 5. Download the original file
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = "decrypted_work_file";
+      a.download = "decrypted_work_file.png";
       a.click();
       URL.revokeObjectURL(url);
-    
+      
       setStatus("✅ File decrypted and downloaded successfully!");
     } catch (error) {
-      console.error(error);
-      setStatus("Decryption failed. Check your private key.");
+      console.error("DECRYPTION ERROR DETAILS:", error);
+      setStatus("Decryption failed. Check browser console (F12) for details.");
     } finally {
       setIpfsLoading(false);
     }
