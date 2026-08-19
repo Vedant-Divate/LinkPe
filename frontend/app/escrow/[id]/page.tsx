@@ -21,6 +21,9 @@ export default function EscrowPage() {
   const [summary, setSummary] = useState("");
   const [ipfsLoading, setIpfsLoading] = useState(false);
   const [decryptionKey, setDecryptionKey] = useState("");
+  const [remainingTime, setRemainingTime] = useState(0);
+
+  const TIME_LOCK_SECONDS = 604800;
 
   const { data: contractState, isFetched } = useReadContract({
     address: ESCROW_ADDRESS,
@@ -41,6 +44,20 @@ export default function EscrowPage() {
   const proposedSplit = stateAsAny ? Number(stateAsAny.proposedSplit ?? stateAsAny[6]) : 0;
   const ipfsHash = ipfsHashData as string;
   const escrowAmount = stateAsAny ? Number(stateAsAny.amount) / 1e18 : 0;
+  const submissionTimestamp = stateAsAny ? Number(stateAsAny.submissionTimestamp ?? stateAsAny[4]) : 0;
+
+  // Countdown Timer Logic for Client
+  useEffect(() => {
+    if (stateNum === 2 && submissionTimestamp > 0) {
+      const timer = setInterval(() => {
+        const currentTime = Math.floor(Date.now() / 1000);
+        const expiryTime = submissionTimestamp + TIME_LOCK_SECONDS;
+        const diff = expiryTime - currentTime;
+        setRemainingTime(diff > 0 ? diff : 0);
+      }, 1000);
+      return () => clearInterval(timer);
+    }
+  }, [stateNum, submissionTimestamp]);
 
   useEffect(() => {
     if (params.id) {
@@ -306,6 +323,18 @@ export default function EscrowPage() {
                   <h3 className="font-bold text-purple-400">Work Submitted!</h3>
                 </div>
                 <p className="text-xs text-white/50 mb-4 break-all font-mono">IPFS Hash: {ipfsHash}</p>
+                
+                {/* Client Warning Timer */}
+                <div className="mb-6 p-3 bg-black/30 rounded-lg border border-white/5">
+                  <p className="text-xs text-white/50 mb-2">⚠️ Action Required</p>
+                  {remainingTime > 0 ? (
+                    <p className="font-mono text-yellow-400 text-sm">
+                      If you don't act, funds will auto-release in: {Math.floor(remainingTime / 86400)}d {Math.floor((remainingTime % 86400) / 3600)}h {Math.floor((remainingTime % 3600) / 60)}m
+                    </p>
+                  ) : (
+                    <p className="text-green-400 font-medium text-sm">Time lock expired! The freelancer can now claim funds.</p>
+                  )}
+                </div>
                 
                 <div className="p-4 bg-black/30 rounded-lg border border-white/10">
                   <p className="text-sm text-white/70 mb-2">Enter Decryption Key</p>

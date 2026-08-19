@@ -99,7 +99,7 @@ export default function Home() {
       const data = await response.json();
       if (data.id) {
         setLink(`http://localhost:3000/escrow/${data.id}`);
-        setToast("✅ Link generated successfully!");
+        setToast("Link generated successfully!");
         setTimeout(() => setToast(""), 3000); // Hide after 3 seconds
       }
     } catch (error) {
@@ -263,11 +263,23 @@ export default function Home() {
               </button>
             </form>
             {link && (
-              <div className="mt-6 p-4 bg-green-900/20 border border-green-500/30 rounded-lg text-center">
-                <p className="text-green-400 text-sm font-medium mb-2">Link Generated!</p>
-                <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline break-all text-sm">
-                  {link}
-                </a>
+              <div className="mt-6 p-4 bg-green-900/20 border border-green-500/30 rounded-lg space-y-3">
+                <p className="text-green-400 text-sm font-medium text-center">Link Generated!</p>
+                <div className="flex items-center gap-2 bg-black/40 rounded-lg p-2 border border-white/5">
+                  <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline break-all text-sm flex-1 pl-2">
+                    {link}
+                  </a>
+                  <button 
+                    onClick={() => { 
+                      navigator.clipboard.writeText(link); 
+                      setToast("Link copied to clipboard!"); 
+                      setTimeout(() => setToast(""), 3000); 
+                    }}
+                    className="bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded text-xs font-medium transition-colors"
+                  >
+                    Copy
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -385,13 +397,15 @@ export default function Home() {
           {txStatus && <p className="text-sm text-white/50 text-center mt-4">{txStatus}</p>}
         </div>
       )}
-      
+
       {/* Toast Notification */}
       {toast && (
-        <div className="fixed bottom-8 right-8 z-50 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg border border-green-400/30">
+        <div className="fixed bottom-8 right-8 z-50 bg-black/80 backdrop-blur-xl text-green-400 px-4 py-3 rounded-lg shadow-2xl border border-green-500/30 text-sm font-medium flex items-center gap-2">
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
           {toast}
         </div>
       )}
+
     </main>
   );
 }
