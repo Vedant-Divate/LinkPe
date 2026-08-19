@@ -39,6 +39,7 @@ export default function Home() {
   const clientAddr = stateAsAny ? stateAsAny.client ?? stateAsAny[1] : "";
   const submissionTimestamp = stateAsAny ? Number(stateAsAny.submissionTimestamp ?? stateAsAny[4]) : 0;
   const escrowAmount = stateAsAny ? Number(stateAsAny.amount) / 1e18 : 0;
+  const proposedSplit = stateAsAny ? Number(stateAsAny.proposedSplit ?? stateAsAny[6]) : 0;
 
   useEffect(() => {
     if (stateNum === 2 && submissionTimestamp > 0) {
@@ -162,7 +163,11 @@ export default function Home() {
   if (!isConnected) {
     return (
       <main className="flex min-h-[calc(100vh-80px)] flex-col items-center justify-center text-center">
-        <div className="mb-8 h-16 w-16 rounded-2xl bg-gradient-to-tr from-blue-500 to-purple-600 animate-pulse" />
+        <div className="mb-8 h-16 w-16 rounded-2xl bg-gradient-to-tr from-blue-500 to-purple-600 flex items-center justify-center animate-pulse">
+          <svg className="h-10 w-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+          </svg>
+        </div>
         <h1 className="text-4xl font-bold tracking-tight mb-3">Welcome to LinkPe</h1>
         <p className="text-white/50 max-w-md">Connect your wallet to start creating trustless, encrypted freelance escrows.</p>
         <div className="mt-8"><ConnectButton /></div>
@@ -296,13 +301,24 @@ export default function Home() {
             </div>
           )}
 
-          {stateNum === 3 && (
-            <div className="text-center py-16 rounded-xl border border-green-500/30 bg-green-900/10">
-              <div className="h-12 w-12 rounded-full bg-green-500/20 mx-auto mb-4 flex items-center justify-center">
+          {/* Released State (3) */}
+          {stateNum === 3 && escrowAmount > 0 && (
+            <div className="rounded-xl border border-green-500/30 bg-green-900/10 p-8 text-center space-y-6">
+              <div className="h-12 w-12 rounded-full bg-green-500/20 mx-auto flex items-center justify-center">
                 <svg className="h-6 w-6 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
               </div>
-              <h3 className="text-xl font-bold text-green-400">Funds Released!</h3>
-              <p className="text-white/50 mt-2">This escrow is complete. You can generate a new one.</p>
+              <div>
+                <h3 className="text-xl font-bold text-green-400">Funds Released!</h3>
+                <p className="text-white/50 mt-2">This escrow is complete.</p>
+              </div>
+              <div className="pt-6 border-t border-white/10">
+                <p className="text-white/50 text-sm mb-1">You Received</p>
+                <p className="text-2xl font-bold text-green-400">
+                  {/* Calculate amount based on whether it was a split or full release */}
+                  {proposedSplit > 0 ? (escrowAmount * proposedSplit / 100).toFixed(2) : escrowAmount} 
+                  <span className="text-lg text-white/50"> USDC</span>
+                </p>
+              </div>
             </div>
           )}
           {txStatus && <p className="text-sm text-white/50 text-center mt-4">{txStatus}</p>}
