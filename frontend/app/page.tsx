@@ -26,6 +26,7 @@ export default function Home() {
   const [remainingTime, setRemainingTime] = useState(0);
   const [generatedPrivateKey, setGeneratedPrivateKey] = useState("");
   const [copied, setCopied] = useState(false);
+  const [toast, setToast] = useState("");
 
   // Read the active escrow state from the smart contract
   const { data: contractState } = useReadContract({
@@ -64,6 +65,14 @@ export default function Home() {
     }
   }, []);
 
+  // Clear stale transaction status when escrow state changes
+  useEffect(() => {
+    setTxStatus("");
+    if (stateNum !== 4) {
+      setSplitPercent("");
+    }
+  }, [stateNum]);
+
   // Auto-switch to active tab when state changes
   useEffect(() => {
     if (stateNum > 0 && stateNum !== 5) {
@@ -90,6 +99,8 @@ export default function Home() {
       const data = await response.json();
       if (data.id) {
         setLink(`http://localhost:3000/escrow/${data.id}`);
+        setToast("✅ Link generated successfully!");
+        setTimeout(() => setToast(""), 3000); // Hide after 3 seconds
       }
     } catch (error) {
       console.error(error);
@@ -372,6 +383,13 @@ export default function Home() {
           )}
 
           {txStatus && <p className="text-sm text-white/50 text-center mt-4">{txStatus}</p>}
+        </div>
+      )}
+      
+      {/* Toast Notification */}
+      {toast && (
+        <div className="fixed bottom-8 right-8 z-50 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg border border-green-400/30">
+          {toast}
         </div>
       )}
     </main>
