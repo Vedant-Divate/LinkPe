@@ -1,15 +1,15 @@
 const hre = require("hardhat");
 
 async function main() {
-  console.log("Fast-forwarding blockchain time by 130 seconds (2 mins 10 secs)...");
+  console.log("Fast-forwarding blockchain time by 7 days (604800 seconds)...");
   
-  // Increase time
-  await hre.network.provider.send("evm_increaseTime", [130]);
+  // Increase time by 7 days
+  await hre.network.provider.send("evm_increaseTime", [604800]);
   
-  // Mine a new block to lock in the new time
+  // Mine a new block to apply the time increase
   await hre.network.provider.send("evm_mine");
   
-  console.log("✅ Time advanced! You can now click 'Claim Auto-Release' on the frontend.");
+  console.log("✅ Time advanced successfully! The auto-release lock has expired.");
 }
 
 main().catch((error) => {

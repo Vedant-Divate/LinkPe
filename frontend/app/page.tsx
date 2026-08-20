@@ -1,10 +1,11 @@
 "use client";
 import { useState, useEffect } from "react";
-import { useAccount, useWriteContract, useReadContracts } from "wagmi"; // <-- Update import
+import { useAccount, useWriteContract, useReadContracts, useBlock } from "wagmi"; // <-- Update import
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { escrowABI } from "@/lib/abi";
 import { encryptAndUploadFile } from "@/lib/ipfs";
 import EthCrypto from "eth-crypto";
+// import { useAccount, useWriteContract, useReadContracts, useBlock } from "wagmi";
 
 const ESCROW_ADDRESS = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
 const TIME_LOCK_SECONDS = 604800; // 7 days
@@ -52,17 +53,16 @@ export default function Home() {
   const submissionTimestamp = contractData?.[3]?.status === 'success' ? Number(contractData[3].result) : 0;
   const proposedSplit = contractData?.[4]?.status === 'success' ? Number(contractData[4].result) : 0;
 
-  useEffect(() => {
-    if (stateNum === 2 && submissionTimestamp > 0) {
-      const timer = setInterval(() => {
-        const currentTime = Math.floor(Date.now() / 1000);
-        const expiryTime = submissionTimestamp + TIME_LOCK_SECONDS;
-        const diff = expiryTime - currentTime;
-        setRemainingTime(diff > 0 ? diff : 0);
-      }, 1000);
-      return () => clearInterval(timer);
+  // Get latest block timestamp from blockchain
+  const { data: block } = useBlock({ blockTag: 'latest', query: { refetchInterval: 1000 } });
+  
+   useEffect(() => {
+    if (stateNum === 2 && submissionTimestamp > 0 && block?.timestamp) {
+      const expiryTime = BigInt(submissionTimestamp) + BigInt(TIME_LOCK_SECONDS);
+      const diff = expiryTime - block.timestamp;
+      setRemainingTime(Number(diff) > 0 ? Number(diff) : 0);
     }
-  }, [stateNum, submissionTimestamp]);
+  }, [stateNum, submissionTimestamp, block]);
 
   useEffect(() => {
     const savedKey = localStorage.getItem("linkpe_demo_private_key");

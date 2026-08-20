@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
-import { useAccount, useWriteContract, useReadContracts } from "wagmi"; // <-- Update import
+import { useAccount, useWriteContract, useReadContracts, useBlock } from "wagmi";
 import { escrowABI, usdcABI } from "@/lib/abi";
 import { parseUnits } from "viem";
 import EthCrypto from "eth-crypto";
@@ -16,12 +16,13 @@ export default function EscrowPage() {
   const { address, isConnected } = useAccount();
   const { writeContractAsync } = useWriteContract();
 
-  const [escrowData, setEscrowData] = useState<any>(null); // Backend data
+  const [escrowData, setEscrowData] = useState<any>(null);
   const [loadingAction, setLoadingAction] = useState("");
   const [status, setStatus] = useState("");
   const [summary, setSummary] = useState("");
   const [decryptionKey, setDecryptionKey] = useState("");
   const [remainingTime, setRemainingTime] = useState(0);
+  const [clientEscrowList, setClientEscrowList] = useState<any[]>([]);
 
   const TIME_LOCK_SECONDS = 604800;
 
@@ -47,21 +48,16 @@ export default function EscrowPage() {
   const proposedSplit = contractData?.[3]?.status === 'success' ? Number(contractData[3].result) : 0;
   const ipfsHash = contractData?.[4]?.status === 'success' ? contractData[4].result as string : "";
 
-  console.log("Client Escrow ID:", escrowId);
-  console.log("Client Contract Data:", contractData);
-  console.log("Client State Num:", stateNum);
+  // Get latest block timestamp from blockchain
+  const { data: block } = useBlock({ blockTag: 'latest', query: { refetchInterval: 1000 } });
 
   useEffect(() => {
-    if (stateNum === 2 && submissionTimestamp > 0) {
-      const timer = setInterval(() => {
-        const currentTime = Math.floor(Date.now() / 1000);
-        const expiryTime = submissionTimestamp + TIME_LOCK_SECONDS;
-        const diff = expiryTime - currentTime;
-        setRemainingTime(diff > 0 ? diff : 0);
-      }, 1000);
-      return () => clearInterval(timer);
+    if (stateNum === 2 && submissionTimestamp > 0 && block?.timestamp) {
+      const expiryTime = BigInt(submissionTimestamp) + BigInt(TIME_LOCK_SECONDS);
+      const diff = expiryTime - block.timestamp;
+      setRemainingTime(Number(diff) > 0 ? Number(diff) : 0);
     }
-  }, [stateNum, submissionTimestamp]);
+  }, [stateNum, submissionTimestamp, block]);
 
   useEffect(() => {
     if (escrowId) {
@@ -75,6 +71,31 @@ export default function EscrowPage() {
     setStatus("");
     setSummary("");
   }, [stateNum]);
+
+  // Load client's escrow list from localStorage
+  useEffect(() => {
+    const savedList = localStorage.getItem("linkpe_client_escrows");
+    if (savedList) {
+      setClientEscrowList(JSON.parse(savedList));
+    }
+  }, []);
+
+  // Save current escrow to list as soon as backend data is loaded
+  useEffect(() => {
+    if (escrowData && escrowId) {
+      const newItem = {
+        id: escrowId,
+        amount: escrowData.amount,
+        description: escrowData.description
+      };
+      setClientEscrowList((prev) => {
+        const filtered = prev.filter(item => item.id !== escrowId);
+        const updated = [newItem, ...filtered];
+        localStorage.setItem("linkpe_client_escrows", JSON.stringify(updated));
+        return updated;
+      });
+    }
+  }, [escrowData, escrowId]);
   
   const handleFund = async () => {
     if (!escrowData) return;
@@ -232,8 +253,46 @@ export default function EscrowPage() {
         <div className="text-center py-16 rounded-xl border border-dashed border-white/10"><p className="text-white/40">Loading link details...</p></div>
       ) : (
         <div className="space-y-6">
+          {/* Client Escrow List */}
+          {clientEscrowList.length > 0 && (
+            <div className="rounded-xl border border-white/5 bg-white/5 p-4 space-y-2">
+              <p className="text-sm text-white/50 mb-2">Your Escrows ({clientEscrowList.length})</p>
+              <div className="max-h-60 overflow-y-auto space-y-2">
+                {clientEscrowList.map((item) => (
+                  <div 
+                    key={item.id}
+                    className={`w-full text-left p-3 rounded-lg border transition-colors ${escrowId === item.id ? 'bg-blue-600/20 border-blue-500' : 'bg-black/30 border-white/5 hover:bg-black/40'}`}
+                  >
+                    <div className="flex justify-between items-center">
+                      <a href={`/escrow/${item.id}`} className="flex-1">
+                        <p className="text-sm text-white/80 truncate">{item.description}</p>
+                        <p className="text-xs text-white/40 truncate mt-1 font-mono">{item.id}</p>
+                      </a>
+                      <div className="flex items-center gap-3 ml-2">
+                        <p className="text-sm text-green-400">{item.amount} USDC</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Display Current UUID */}
           <div className="rounded-xl border border-white/5 bg-white/5 p-6">
             <div className="grid grid-cols-1 gap-4 text-sm">
+              <div>
+                <p className="text-white/50 mb-1">Escrow ID (UUID)</p>
+                <div className="flex items-center gap-2 bg-black/30 rounded-lg p-2 border border-white/5">
+                  <p className="break-all font-mono text-white/90 flex-1 pl-2 text-xs">{escrowId}</p>
+                  <button 
+                    onClick={() => { navigator.clipboard.writeText(escrowId); setStatus("✅ UUID Copied!"); setTimeout(() => setStatus(""), 2000); }}
+                    className="bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded text-xs font-medium transition-colors"
+                  >
+                    Copy
+                  </button>
+                </div>
+              </div>
               <div>
                 <p className="text-white/50 mb-1">Freelancer Address</p>
                 <p className="break-all font-mono text-white/90">{escrowData.freelancerAddress}</p>
