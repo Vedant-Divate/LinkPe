@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { useAccount, useWriteContract, useReadContract } from "wagmi";
+import { useAccount, useWriteContract, useReadContracts } from "wagmi"; // <-- Update import
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { escrowABI } from "@/lib/abi";
 import { encryptAndUploadFile } from "@/lib/ipfs";
@@ -12,6 +12,7 @@ const TIME_LOCK_SECONDS = 604800; // 7 days
 export default function Home() {
   const [splitPercent, setSplitPercent] = useState("");
   const [activeTab, setActiveTab] = useState("create");
+  const [activeEscrowId, setActiveEscrowId] = useState("");
   const { address, isConnected } = useAccount();
   const { writeContractAsync } = useWriteContract();
 
@@ -26,20 +27,29 @@ export default function Home() {
   const [generatedPrivateKey, setGeneratedPrivateKey] = useState("");
   const [copied, setCopied] = useState(false);
   const [toast, setToast] = useState("");
+  const [manualEscrowId, setManualEscrowId] = useState("");
 
-  const { data: contractState } = useReadContract({
-    address: ESCROW_ADDRESS,
-    abi: escrowABI,
-    functionName: "currentEscrow",
-    query: { refetchInterval: 2000 }
+  // Read specific escrow fields using getter functions
+  const { data: contractData } = useReadContracts({
+    contracts: [
+      { address: ESCROW_ADDRESS, abi: escrowABI, functionName: "getEscrowState", args: [String(activeEscrowId)] },
+      { address: ESCROW_ADDRESS, abi: escrowABI, functionName: "getEscrowClient", args: [String(activeEscrowId)] },
+      { address: ESCROW_ADDRESS, abi: escrowABI, functionName: "getEscrowAmount", args: [String(activeEscrowId)] },
+      { address: ESCROW_ADDRESS, abi: escrowABI, functionName: "getEscrowSubmissionTime", args: [String(activeEscrowId)] },
+      { address: ESCROW_ADDRESS, abi: escrowABI, functionName: "getEscrowProposedSplit", args: [String(activeEscrowId)] },
+    ],
+    query: { 
+      refetchInterval: 2000,
+      enabled: !!activeEscrowId
+    }
   });
 
-  const stateAsAny = contractState as any;
-  const stateNum = stateAsAny ? Number(stateAsAny.state ?? stateAsAny[3]) : -1;
-  const clientAddr = stateAsAny ? stateAsAny.client ?? stateAsAny[1] : "";
-  const submissionTimestamp = stateAsAny ? Number(stateAsAny.submissionTimestamp ?? stateAsAny[4]) : 0;
-  const escrowAmount = stateAsAny ? Number(stateAsAny.amount) / 1e18 : 0;
-  const proposedSplit = stateAsAny ? Number(stateAsAny.proposedSplit ?? stateAsAny[6]) : 0;
+  const stateNum = contractData?.[0]?.status === 'success' ? Number(contractData[0].result) : -1;
+  const clientAddr = contractData?.[1]?.status === 'success' ? contractData[1].result as string : "";
+  const escrowAmountBigInt = contractData?.[2]?.status === 'success' ? contractData[2].result as bigint : 0n;
+  const escrowAmount = Number(escrowAmountBigInt / 1000000000000000000n);
+  const submissionTimestamp = contractData?.[3]?.status === 'success' ? Number(contractData[3].result) : 0;
+  const proposedSplit = contractData?.[4]?.status === 'success' ? Number(contractData[4].result) : 0;
 
   useEffect(() => {
     if (stateNum === 2 && submissionTimestamp > 0) {
@@ -56,12 +66,15 @@ export default function Home() {
   useEffect(() => {
     const savedKey = localStorage.getItem("linkpe_demo_private_key");
     if (savedKey) setGeneratedPrivateKey(savedKey);
+    
+    const savedEscrowId = localStorage.getItem("linkpe_active_escrow_id");
+    if (savedEscrowId) setActiveEscrowId(savedEscrowId);
   }, []);
 
   useEffect(() => {
     if (stateNum > 0 && stateNum !== 5) {
       setActiveTab("active");
-    } else if (stateNum === 0 || stateNum === 5) {
+    } else if (stateNum === 0 || stateNum === 5 || stateNum === -1) {
       setActiveTab("create");
     }
   }, [stateNum]);
@@ -82,8 +95,11 @@ export default function Home() {
         body: JSON.stringify({ freelancerAddress: address, amount: Number(amount), description: description }),
       });
       const data = await response.json();
+      console.log("Backend response (generateLink):", data); // <-- ADD THIS LOG
       if (data.id) {
         setLink(`http://localhost:3000/escrow/${data.id}`);
+        setActiveEscrowId(data.id);
+        localStorage.setItem("linkpe_active_escrow_id", data.id);
         setToast("Link generated successfully!");
         setTimeout(() => setToast(""), 3000);
       }
@@ -97,6 +113,7 @@ export default function Home() {
   const handleFileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!file) return alert("Please select a file first.");
+    if (!activeEscrowId) return alert("No active escrow ID found.");
     setLoadingAction("submit");
     setTxStatus("Encrypting file & uploading to IPFS...");
     try {
@@ -109,7 +126,7 @@ export default function Home() {
         address: ESCROW_ADDRESS,
         abi: escrowABI,
         functionName: "submitWork",
-        args: [ipfsHash],
+        args: [activeEscrowId, ipfsHash], // Pass escrowId
       });
       setTxStatus("Success! Work submitted. 7-day timer started.");
     } catch (error) {
@@ -121,6 +138,7 @@ export default function Home() {
   };
 
   const handleAutoRelease = async () => {
+    if (!activeEscrowId) return alert("No active escrow ID found.");
     setLoadingAction("release");
     setTxStatus("Awaiting signature to auto-release funds...");
     try {
@@ -128,10 +146,11 @@ export default function Home() {
         address: ESCROW_ADDRESS,
         abi: escrowABI,
         functionName: "autoReleaseFunds",
-        args: [],
+        args: [activeEscrowId], // Pass escrowId
       });
       setTxStatus(`✅ Success! You received ${escrowAmount} USDC.`);
       localStorage.removeItem("linkpe_demo_private_key");
+      localStorage.removeItem("linkpe_active_escrow_id"); // Clear ID so they can start a new one
     } catch (error: any) {
       console.error(error);
       setTxStatus("Transaction failed. Time lock may not be expired yet.");
@@ -141,6 +160,7 @@ export default function Home() {
   };
 
   const handleProposeSplit = async () => {
+    if (!activeEscrowId) return alert("No active escrow ID found.");
     setLoadingAction("split");
     setTxStatus("Awaiting signature to propose split...");
     try {
@@ -148,7 +168,7 @@ export default function Home() {
         address: ESCROW_ADDRESS,
         abi: escrowABI,
         functionName: "proposeSplit",
-        args: [Number(splitPercent)],
+        args: [activeEscrowId, Number(splitPercent)], // Pass escrowId
       });
       const freelancerGets = (escrowAmount * Number(splitPercent)) / 100;
       setTxStatus(`✅ Success! Proposed ${splitPercent}% split. You will receive ${freelancerGets} USDC if accepted.`);
@@ -239,8 +259,27 @@ export default function Home() {
       {activeTab === "active" && (
         <div className="max-w-2xl mx-auto space-y-6">
           {stateNum <= 0 && (
-            <div className="text-center py-16 rounded-xl border border-dashed border-white/10">
-              <p className="text-white/40">No active escrows. Create one to get started.</p>
+            <div className="text-center py-16 rounded-xl border border-dashed border-white/10 space-y-4">
+              <p className="text-white/40">No active escrows tracked on this device.</p>
+              <p className="text-white/40 text-sm">If you have an Escrow ID (UUID from the URL), paste it here to track it:</p>
+              <div className="flex gap-2 max-w-md mx-auto">
+                <input 
+                  type="text" 
+                  value={manualEscrowId} 
+                  onChange={(e) => setManualEscrowId(e.target.value)} 
+                  className="flex-1 px-3 py-2.5 bg-black/30 rounded-lg border border-white/10 focus:outline-none focus:border-blue-500" 
+                  placeholder="e.g., 123e4567-e89b-12d3-a456-426614174000" 
+                />
+                <button 
+                  onClick={() => { 
+                    setActiveEscrowId(manualEscrowId); 
+                    localStorage.setItem("linkpe_active_escrow_id", manualEscrowId);
+                  }} 
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-lg transition-colors"
+                >
+                  Track
+                </button>
+              </div>
             </div>
           )}
 

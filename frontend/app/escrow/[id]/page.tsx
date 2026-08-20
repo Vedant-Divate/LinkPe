@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
-import { useAccount, useWriteContract, useReadContract } from "wagmi";
+import { useAccount, useWriteContract, useReadContracts } from "wagmi"; // <-- Update import
 import { escrowABI, usdcABI } from "@/lib/abi";
 import { parseUnits } from "viem";
 import EthCrypto from "eth-crypto";
@@ -12,10 +12,11 @@ const ESCROW_ADDRESS = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
 
 export default function EscrowPage() {
   const params = useParams();
+  const escrowId = params?.id ? (Array.isArray(params.id) ? params.id[0] : params.id as string) : ""; 
   const { address, isConnected } = useAccount();
   const { writeContractAsync } = useWriteContract();
 
-  const [escrowData, setEscrowData] = useState<any>(null);
+  const [escrowData, setEscrowData] = useState<any>(null); // Backend data
   const [loadingAction, setLoadingAction] = useState("");
   const [status, setStatus] = useState("");
   const [summary, setSummary] = useState("");
@@ -24,26 +25,27 @@ export default function EscrowPage() {
 
   const TIME_LOCK_SECONDS = 604800;
 
-  const { data: contractState } = useReadContract({
-    address: ESCROW_ADDRESS,
-    abi: escrowABI,
-    functionName: "currentEscrow",
-    query: { refetchInterval: 2000 }
+  // Read specific escrow fields using getter functions
+  const { data: contractData } = useReadContracts({
+    contracts: [
+      { address: ESCROW_ADDRESS, abi: escrowABI, functionName: "getEscrowState", args: [String(escrowId)] },
+      { address: ESCROW_ADDRESS, abi: escrowABI, functionName: "getEscrowAmount", args: [String(escrowId)] },
+      { address: ESCROW_ADDRESS, abi: escrowABI, functionName: "getEscrowSubmissionTime", args: [String(escrowId)] },
+      { address: ESCROW_ADDRESS, abi: escrowABI, functionName: "getEscrowProposedSplit", args: [String(escrowId)] },
+      { address: ESCROW_ADDRESS, abi: escrowABI, functionName: "getEscrowIpfsHash", args: [String(escrowId)] },
+    ],
+    query: { 
+      refetchInterval: 2000,
+      enabled: !!escrowId
+    }
   });
 
-  const { data: ipfsHashData } = useReadContract({
-    address: ESCROW_ADDRESS,
-    abi: escrowABI,
-    functionName: "currentIpfsHash",
-    query: { refetchInterval: 2000 }
-  });
-
-  const stateAsAny = contractState as any;
-  const stateNum = stateAsAny ? Number(stateAsAny.state ?? stateAsAny[3]) : -1;
-  const proposedSplit = stateAsAny ? Number(stateAsAny.proposedSplit ?? stateAsAny[6]) : 0;
-  const ipfsHash = ipfsHashData as string;
-  const escrowAmount = stateAsAny ? Number(stateAsAny.amount) / 1e18 : 0;
-  const submissionTimestamp = stateAsAny ? Number(stateAsAny.submissionTimestamp ?? stateAsAny[4]) : 0;
+  const stateNum = contractData?.[0]?.status === 'success' ? Number(contractData[0].result) : -1;
+  const escrowAmountBigInt = contractData?.[1]?.status === 'success' ? contractData[1].result as bigint : 0n;
+  const escrowAmount = Number(escrowAmountBigInt / 1000000000000000000n);
+  const submissionTimestamp = contractData?.[2]?.status === 'success' ? Number(contractData[2].result) : 0;
+  const proposedSplit = contractData?.[3]?.status === 'success' ? Number(contractData[3].result) : 0;
+  const ipfsHash = contractData?.[4]?.status === 'success' ? contractData[4].result as string : "";
 
   useEffect(() => {
     if (stateNum === 2 && submissionTimestamp > 0) {
@@ -58,18 +60,18 @@ export default function EscrowPage() {
   }, [stateNum, submissionTimestamp]);
 
   useEffect(() => {
-    if (params.id) {
-      fetch(`http://localhost:3001/api/escrow/${params.id}`)
+    if (escrowId) {
+      fetch(`http://localhost:3001/api/escrow/${escrowId}`)
         .then(res => res.json())
         .then(data => setEscrowData(data));
     }
-  }, [params.id]);
+  }, [escrowId]);
 
   useEffect(() => {
     setStatus("");
     setSummary("");
   }, [stateNum]);
-
+  
   const handleFund = async () => {
     if (!escrowData) return;
     setLoadingAction("fund");
@@ -77,7 +79,7 @@ export default function EscrowPage() {
     try {
       await writeContractAsync({ address: USDC_ADDRESS, abi: usdcABI, functionName: "approve", args: [ESCROW_ADDRESS, parseUnits(escrowData.amount.toString(), 18)] });
       setStatus("2/2: Funding Escrow...");
-      await writeContractAsync({ address: ESCROW_ADDRESS, abi: escrowABI, functionName: "createAndFundEscrow", args: [escrowData.freelancerAddress, parseUnits(escrowData.amount.toString(), 18)] });
+      await writeContractAsync({ address: ESCROW_ADDRESS, abi: escrowABI, functionName: "createAndFundEscrow", args: [escrowId, escrowData.freelancerAddress, parseUnits(escrowData.amount.toString(), 18)] });
       setStatus("Success! Escrow funded.");
       setSummary(`✅ Escrow Funded: You locked ${escrowData.amount} USDC.`);
     } catch (error: any) {
@@ -92,7 +94,7 @@ export default function EscrowPage() {
     setLoadingAction("release");
     setStatus("Awaiting signature to release funds...");
     try {
-      await writeContractAsync({ address: ESCROW_ADDRESS, abi: escrowABI, functionName: "releaseFunds", args: [] });
+      await writeContractAsync({ address: ESCROW_ADDRESS, abi: escrowABI, functionName: "releaseFunds", args: [escrowId] });
       setStatus("Success! Funds released to freelancer.");
       setSummary(`✅ Transaction Complete: You released ${escrowAmount} USDC to the freelancer.`);
     } catch (error: any) {
@@ -107,7 +109,7 @@ export default function EscrowPage() {
     setLoadingAction("reject");
     setStatus("Awaiting signature to reject work...");
     try {
-      await writeContractAsync({ address: ESCROW_ADDRESS, abi: escrowABI, functionName: "rejectWork", args: [] });
+      await writeContractAsync({ address: ESCROW_ADDRESS, abi: escrowABI, functionName: "rejectWork", args: [escrowId] });
       setStatus("Work rejected. Dispute started.");
     } catch (error: any) {
       console.error(error);
@@ -121,7 +123,7 @@ export default function EscrowPage() {
     setLoadingAction("split");
     setStatus("Awaiting signature to accept split...");
     try {
-      await writeContractAsync({ address: ESCROW_ADDRESS, abi: escrowABI, functionName: "acceptSplit", args: [] });
+      await writeContractAsync({ address: ESCROW_ADDRESS, abi: escrowABI, functionName: "acceptSplit", args: [escrowId] });
       const freelancerGets = (escrowAmount * proposedSplit) / 100;
       const clientGets = escrowAmount - freelancerGets;
       setStatus("Success! Split accepted and funds distributed.");
@@ -138,7 +140,7 @@ export default function EscrowPage() {
     setLoadingAction("cancel");
     setStatus("Awaiting signature to cancel escrow...");
     try {
-      await writeContractAsync({ address: ESCROW_ADDRESS, abi: escrowABI, functionName: "requestCancel", args: [] });
+      await writeContractAsync({ address: ESCROW_ADDRESS, abi: escrowABI, functionName: "requestCancel", args: [escrowId] });
       const refund = escrowAmount * 0.95;
       const fee = escrowAmount * 0.05;
       setStatus("Escrow cancelled. Funds refunded (minus fee).");

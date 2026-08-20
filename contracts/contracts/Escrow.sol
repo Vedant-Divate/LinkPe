@@ -5,14 +5,10 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 contract LinkPeEscrow is ReentrancyGuard {
-    // Official USDC Contract on Polygon Amoy Testnet
-    // (We will use this for testing, real Polygon USDC can be swapped later)
     IERC20 public usdc;
-
-
-    constructor(address _usdc) {
-        usdc = IERC20(_usdc);
-    }
+    
+    // Use 0 for public demo testing, 604800 for production (7 days)
+    uint256 public constant TIME_LOCK = 0; 
     
     enum State { Pending, Funded, Submitted, Released, Disputed, Cancelled }
     
@@ -23,145 +19,161 @@ contract LinkPeEscrow is ReentrancyGuard {
         State state;
         uint256 submissionTimestamp;
         uint256 disputeTimestamp;
-        uint8 proposedSplit; // Percentage freelancer wants (0-100)
+        uint8 proposedSplit;
+        string ipfsHash;
     }
     
-    Escrow public currentEscrow;
-    string public currentIpfsHash;
+    // Mapping from UUID (string) to Escrow struct - Supports infinite parallel escrows!
+    mapping(string => Escrow) public escrows;
     
-    // 7 days in seconds (604800). For testing, we will use 120 seconds (2 mins)
-    uint256 public constant TIME_LOCK = 604800; 
-
     event EscrowFunded(address indexed client, address indexed freelancer, uint256 amount);
     event WorkSubmitted(address indexed freelancer, string ipfsHash);
     event WorkRejected(address indexed client);
     event SplitProposed(address indexed freelancer, uint8 split);
     event FundsReleased(address indexed to, uint256 amount);
 
-    // Step 1 & 2 Combined: Client funds the escrow and binds the freelancer address
-    function createAndFundEscrow(address _freelancer, uint256 _amount) external nonReentrant {
-        require(currentEscrow.state == State.Pending || currentEscrow.state == State.Released || currentEscrow.state == State.Cancelled, "Active escrow exists");
+    constructor(address _usdc) {
+        usdc = IERC20(_usdc);
+    }
+
+    function createAndFundEscrow(string memory _escrowId, address _freelancer, uint256 _amount) external nonReentrant {
+        require(escrows[_escrowId].client == address(0), "Escrow already exists");
         
-        currentEscrow = Escrow({
+        escrows[_escrowId] = Escrow({
             freelancer: _freelancer,
-            client: msg.sender, // Dynamic Binding!
+            client: msg.sender,
             amount: _amount,
             state: State.Funded,
             submissionTimestamp: 0,
             disputeTimestamp: 0,
-            proposedSplit: 0
+            proposedSplit: 0,
+            ipfsHash: ""
         });
 
         require(usdc.transferFrom(msg.sender, address(this), _amount), "USDC transfer failed");
-
         emit EscrowFunded(msg.sender, _freelancer, _amount);
     }
 
-    // Step 3: Early Cancellation (Before work is submitted)
-    function requestCancel() external {
-        require(currentEscrow.state == State.Funded, "Can only cancel funded escrow");
-        require(msg.sender == currentEscrow.client || msg.sender == currentEscrow.freelancer, "Not authorized");
-        
-        uint256 fee = (currentEscrow.amount * 5) / 100;
-        uint256 refundAmount = currentEscrow.amount - fee;
+    function submitWork(string memory _escrowId, string memory _ipfsHash) external {
+        Escrow storage e = escrows[_escrowId];
+        require(msg.sender == e.freelancer, "Only freelancer can submit");
+        require(e.state == State.Funded, "Escrow not funded");
 
-        currentEscrow.state = State.Cancelled;
-        // Refund client
-        IERC20(usdc).transfer(currentEscrow.client, refundAmount);
-        // Send fee to treasury (you can replace address(this) with a real treasury wallet)
-        IERC20(usdc).transfer(address(this), fee);
-    }
-
-    // Step 4: Freelancer submits work
-    function submitWork(string memory _ipfsHash) external {
-        require(msg.sender == currentEscrow.freelancer, "Only freelancer can submit");
-        require(currentEscrow.state == State.Funded, "Escrow not funded");
-
-        currentEscrow.state = State.Submitted;
-        currentEscrow.submissionTimestamp = block.timestamp;
-        currentIpfsHash = _ipfsHash; // <-- ADD THIS LINE
+        e.state = State.Submitted;
+        e.submissionTimestamp = block.timestamp;
+        e.ipfsHash = _ipfsHash;
         
         emit WorkSubmitted(msg.sender, _ipfsHash);
     }
 
-    // Step 5A: Client approves work
-    function releaseFunds() external nonReentrant {
-        require(msg.sender == currentEscrow.client, "Only client can release");
-        require(currentEscrow.state == State.Submitted, "Work not submitted");
+    function releaseFunds(string memory _escrowId) external nonReentrant {
+        Escrow storage e = escrows[_escrowId];
+        require(msg.sender == e.client, "Only client can release");
+        require(e.state == State.Submitted, "Work not submitted");
 
-        currentEscrow.state = State.Released;
-        IERC20(usdc).transfer(currentEscrow.freelancer, currentEscrow.amount);
-
-        emit FundsReleased(currentEscrow.freelancer, currentEscrow.amount);
+        e.state = State.Released;
+        require(usdc.transfer(e.freelancer, e.amount), "Transfer failed");
+        emit FundsReleased(e.freelancer, e.amount);
     }
 
-    // Step 5B: Freelancer auto-releases if client ghosts (after 7 days)
-    function autoReleaseFunds() external nonReentrant {
-        require(currentEscrow.state == State.Submitted, "Work not submitted");
-        require(block.timestamp >= currentEscrow.submissionTimestamp + TIME_LOCK, "Time lock not expired");
+    function autoReleaseFunds(string memory _escrowId) external nonReentrant {
+        Escrow storage e = escrows[_escrowId];
+        require(e.state == State.Submitted, "Work not submitted");
+        require(block.timestamp >= e.submissionTimestamp + TIME_LOCK, "Time lock not expired");
 
-        currentEscrow.state = State.Released;
-        IERC20(usdc).transfer(currentEscrow.freelancer, currentEscrow.amount);
-
-        emit FundsReleased(currentEscrow.freelancer, currentEscrow.amount);
+        e.state = State.Released;
+        require(usdc.transfer(e.freelancer, e.amount), "Transfer failed");
+        emit FundsReleased(e.freelancer, e.amount);
     }
 
-    // Step 5C: Client rejects work -> Triggers Dispute
-    function rejectWork() external {
-        require(msg.sender == currentEscrow.client, "Only client can reject");
-        require(currentEscrow.state == State.Submitted, "Work not submitted");
+    function rejectWork(string memory _escrowId) external {
+        Escrow storage e = escrows[_escrowId];
+        require(msg.sender == e.client, "Only client can reject");
+        require(e.state == State.Submitted, "Work not submitted");
 
-        currentEscrow.state = State.Disputed;
-        currentEscrow.disputeTimestamp = block.timestamp;
-
+        e.state = State.Disputed;
+        e.disputeTimestamp = block.timestamp;
         emit WorkRejected(msg.sender);
     }
 
-    // Step 6A: Freelancer proposes a split during dispute
-    function proposeSplit(uint8 _splitPercentage) external {
-        require(msg.sender == currentEscrow.freelancer, "Only freelancer can propose");
-        require(currentEscrow.state == State.Disputed, "Not in dispute");
+    function proposeSplit(string memory _escrowId, uint8 _splitPercentage) external {
+        Escrow storage e = escrows[_escrowId];
+        require(msg.sender == e.freelancer, "Only freelancer can propose");
+        require(e.state == State.Disputed, "Not in dispute");
         require(_splitPercentage <= 100, "Invalid percentage");
 
-        currentEscrow.proposedSplit = _splitPercentage;
+        e.proposedSplit = _splitPercentage;
         emit SplitProposed(msg.sender, _splitPercentage);
     }
 
-    // Step 6B: Client accepts the split
-    function acceptSplit() external nonReentrant {
-        require(msg.sender == currentEscrow.client, "Only client can accept");
-        require(currentEscrow.state == State.Disputed, "Not in dispute");
-        require(currentEscrow.proposedSplit > 0, "No split proposed");
+    function acceptSplit(string memory _escrowId) external nonReentrant {
+        Escrow storage e = escrows[_escrowId];
+        require(msg.sender == e.client, "Only client can accept");
+        require(e.state == State.Disputed, "Not in dispute");
+        require(e.proposedSplit > 0, "No split proposed");
 
-        uint256 freelancerAmount = (currentEscrow.amount * currentEscrow.proposedSplit) / 100;
-        uint256 clientAmount = currentEscrow.amount - freelancerAmount;
+        uint256 freelancerAmount = (e.amount * e.proposedSplit) / 100;
+        uint256 clientAmount = e.amount - freelancerAmount;
 
-        currentEscrow.state = State.Released;
+        e.state = State.Released;
 
-        IERC20(usdc).transfer(currentEscrow.freelancer, freelancerAmount);
-        IERC20(usdc).transfer(currentEscrow.client, clientAmount);
+        require(usdc.transfer(e.freelancer, freelancerAmount), "Transfer to freelancer failed");
+        require(usdc.transfer(e.client, clientAmount), "Transfer to client failed");
 
-        emit FundsReleased(currentEscrow.freelancer, freelancerAmount);
+        emit FundsReleased(e.freelancer, freelancerAmount);
     }
 
-    // Step 6C: Default Judgment (7 days after dispute starts)
-    function defaultJudgment() external nonReentrant {
-        require(currentEscrow.state == State.Disputed, "Not in dispute");
-        require(block.timestamp >= currentEscrow.disputeTimestamp + TIME_LOCK, "Dispute time lock not expired");
+    function defaultJudgment(string memory _escrowId) external nonReentrant {
+        Escrow storage e = escrows[_escrowId];
+        require(e.state == State.Disputed, "Not in dispute");
+        require(block.timestamp >= e.disputeTimestamp + TIME_LOCK, "Dispute time lock not expired");
 
-        uint8 split = currentEscrow.proposedSplit;
-        currentEscrow.state = State.Released;
+        uint8 split = e.proposedSplit;
+        e.state = State.Released;
 
-        // If freelancer proposed a split, they get that amount. 
-        // If freelancer ghosts (proposedSplit = 0), client gets 100% refund.
         if (split > 0) {
-            uint256 freelancerAmount = (currentEscrow.amount * split) / 100;
-            uint256 clientAmount = currentEscrow.amount - freelancerAmount;
-            IERC20(usdc).transfer(currentEscrow.freelancer, freelancerAmount);
-            IERC20(usdc).transfer(currentEscrow.client, clientAmount);
+            uint256 freelancerAmount = (e.amount * split) / 100;
+            uint256 clientAmount = e.amount - freelancerAmount;
+            require(usdc.transfer(e.freelancer, freelancerAmount), "Transfer failed");
+            require(usdc.transfer(e.client, clientAmount), "Transfer failed");
         } else {
-            // Refund client entirely
-            IERC20(usdc).transfer(currentEscrow.client, currentEscrow.amount);
+            require(usdc.transfer(e.client, e.amount), "Transfer failed");
         }
+        emit FundsReleased(e.freelancer, e.amount);
+    }
+
+    function requestCancel(string memory _escrowId) external {
+        Escrow storage e = escrows[_escrowId];
+        require(e.state == State.Funded, "Can only cancel funded escrow");
+        require(msg.sender == e.client || msg.sender == e.freelancer, "Not authorized");
+        
+        uint256 fee = (e.amount * 5) / 100;
+        uint256 refundAmount = e.amount - fee;
+
+        e.state = State.Cancelled;
+        
+        require(usdc.transfer(e.client, refundAmount), "Refund failed");
+        require(usdc.transfer(address(this), fee), "Fee transfer failed");
+    }
+
+    // --- GETTER FUNCTIONS (Bypasses Viem struct decoding bug) ---
+    function getEscrowState(string memory _escrowId) public view returns (uint8) {
+        return uint8(escrows[_escrowId].state); // <-- Explicit cast
+    }
+
+    function getEscrowClient(string memory _escrowId) public view returns (address) {
+        return escrows[_escrowId].client;
+    }
+    function getEscrowAmount(string memory _escrowId) public view returns (uint256) {
+        return escrows[_escrowId].amount;
+    }
+    function getEscrowSubmissionTime(string memory _escrowId) public view returns (uint256) {
+        return escrows[_escrowId].submissionTimestamp;
+    }
+    function getEscrowProposedSplit(string memory _escrowId) public view returns (uint8) {
+        return escrows[_escrowId].proposedSplit;
+    }
+    function getEscrowIpfsHash(string memory _escrowId) public view returns (string memory) {
+        return escrows[_escrowId].ipfsHash;
     }
 }
