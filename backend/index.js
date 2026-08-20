@@ -87,6 +87,21 @@ app.get("/api/ipfs/:hash", async (req, res) => {
   }
 });
 
+// API Route: Get all escrows for a specific freelancer
+app.get("/api/escrows/:freelancerAddress", async (req, res) => {
+  const { freelancerAddress } = req.params;
+  try {
+    const links = await prisma.escrowLink.findMany({
+      where: { freelancerAddress },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.status(200).json(links);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Failed to fetch escrows" });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`LinkPe Backend running on http://localhost:${PORT}`);
 });

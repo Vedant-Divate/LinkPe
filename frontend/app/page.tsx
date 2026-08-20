@@ -28,6 +28,7 @@ export default function Home() {
   const [copied, setCopied] = useState(false);
   const [toast, setToast] = useState("");
   const [manualEscrowId, setManualEscrowId] = useState("");
+  const [escrowList, setEscrowList] = useState<any[]>([]);
 
   // Read specific escrow fields using getter functions
   const { data: contractData } = useReadContracts({
@@ -83,6 +84,15 @@ export default function Home() {
     setTxStatus("");
     if (stateNum !== 4) setSplitPercent("");
   }, [stateNum]);
+
+  // Fetch list of escrows created by this freelancer
+  useEffect(() => {
+    if (address) {
+      fetch(`http://localhost:3001/api/escrows/${address}`)
+        .then(res => res.json())
+        .then(data => setEscrowList(data));
+    }
+  }, [address, stateNum]); // Refetch when state changes
 
   const generateLink = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -258,28 +268,65 @@ export default function Home() {
 
       {activeTab === "active" && (
         <div className="max-w-2xl mx-auto space-y-6">
-          {stateNum <= 0 && (
-            <div className="text-center py-16 rounded-xl border border-dashed border-white/10 space-y-4">
-              <p className="text-white/40">No active escrows tracked on this device.</p>
-              <p className="text-white/40 text-sm">If you have an Escrow ID (UUID from the URL), paste it here to track it:</p>
-              <div className="flex gap-2 max-w-md mx-auto">
-                <input 
-                  type="text" 
-                  value={manualEscrowId} 
-                  onChange={(e) => setManualEscrowId(e.target.value)} 
-                  className="flex-1 px-3 py-2.5 bg-black/30 rounded-lg border border-white/10 focus:outline-none focus:border-blue-500" 
-                  placeholder="e.g., 123e4567-e89b-12d3-a456-426614174000" 
-                />
-                <button 
-                  onClick={() => { 
-                    setActiveEscrowId(manualEscrowId); 
-                    localStorage.setItem("linkpe_active_escrow_id", manualEscrowId);
-                  }} 
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-lg transition-colors"
-                >
-                  Track
-                </button>
+          
+          {/* List of Escrows */}
+          {escrowList.length > 0 && (
+            <div className="rounded-xl border border-white/5 bg-white/5 p-4 space-y-2">
+              <p className="text-sm text-white/50 mb-2">Your Escrows ({escrowList.length})</p>
+              <div className="max-h-60 overflow-y-auto space-y-2">
+                {escrowList.map((item) => (
+                  <div 
+                    key={item.id}
+                    className={`w-full text-left p-3 rounded-lg border transition-colors ${activeEscrowId === item.id ? 'bg-blue-600/20 border-blue-500' : 'bg-black/30 border-white/5 hover:bg-black/40'}`}
+                  >
+                    <div className="flex justify-between items-center">
+                      {/* Clickable area to select escrow */}
+                      <button 
+                        onClick={() => { 
+                          setActiveEscrowId(item.id); 
+                          localStorage.setItem("linkpe_active_escrow_id", item.id);
+                        }} 
+                        className="flex-1 text-left"
+                      >
+                        <p className="text-sm text-white/80 truncate">{item.description}</p>
+                        <p className="text-xs text-white/40 truncate mt-1 font-mono">{item.id}</p>
+                      </button>
+                      
+                      {/* Amount & Copy Button */}
+                      <div className="flex items-center gap-3 ml-2">
+                        <p className="text-sm text-green-400">{item.amount} USDC</p>
+                        <button 
+                          onClick={() => { navigator.clipboard.writeText(item.id); setToast("UUID Copied!"); setTimeout(() => setToast(""), 2000); }}
+                          className="text-white/40 hover:text-white"
+                          title="Copy UUID"
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-6a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
+            </div>
+          )}
+
+          {/* Clear Active Selection Button */}
+          {activeEscrowId && (
+            <button 
+              onClick={() => { 
+                setActiveEscrowId("");
+                localStorage.removeItem("linkpe_active_escrow_id");
+              }} 
+              className="text-xs text-red-400 hover:text-red-300"
+            >
+              Clear active selection
+            </button>
+          )}
+
+          {/* No Active Escrow */}
+          {stateNum <= 0 && (
+            <div className="text-center py-16 rounded-xl border border-dashed border-white/10">
+              <p className="text-white/40">No active escrows tracked on this device. Select one above or create a new one.</p>
             </div>
           )}
 
@@ -353,7 +400,6 @@ export default function Home() {
               <div className="pt-6 border-t border-white/10">
                 <p className="text-white/50 text-sm mb-1">You Received</p>
                 <p className="text-2xl font-bold text-green-400">
-                  {/* Calculate amount based on whether it was a split or full release */}
                   {proposedSplit > 0 ? (escrowAmount * proposedSplit / 100).toFixed(2) : escrowAmount} 
                   <span className="text-lg text-white/50"> USDC</span>
                 </p>

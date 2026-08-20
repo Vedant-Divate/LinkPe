@@ -47,6 +47,10 @@ export default function EscrowPage() {
   const proposedSplit = contractData?.[3]?.status === 'success' ? Number(contractData[3].result) : 0;
   const ipfsHash = contractData?.[4]?.status === 'success' ? contractData[4].result as string : "";
 
+  console.log("Client Escrow ID:", escrowId);
+  console.log("Client Contract Data:", contractData);
+  console.log("Client State Num:", stateNum);
+
   useEffect(() => {
     if (stateNum === 2 && submissionTimestamp > 0) {
       const timer = setInterval(() => {
