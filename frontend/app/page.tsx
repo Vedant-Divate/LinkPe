@@ -4,10 +4,10 @@ import { useAccount, useWriteContract, useReadContracts, useBlock } from "wagmi"
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { escrowABI } from "@/lib/abi";
 import { encryptAndUploadFile } from "@/lib/ipfs";
+import { API_BASE_URL, ESCROW_ADDRESS } from "@/lib/config";
 import EthCrypto from "eth-crypto";
 // import { useAccount, useWriteContract, useReadContracts, useBlock } from "wagmi";
 
-const ESCROW_ADDRESS = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
 const TIME_LOCK_SECONDS = 604800; // 7 days
 
 export default function Home() {
@@ -88,7 +88,7 @@ export default function Home() {
   // Fetch list of escrows created by this freelancer
   useEffect(() => {
     if (address) {
-      fetch(`http://localhost:3001/api/escrows/${address}`)
+      fetch(`${API_BASE_URL}/api/escrows/${address}`)
         .then(res => res.json())
         .then(data => setEscrowList(data));
     }
@@ -99,7 +99,7 @@ export default function Home() {
     setLoadingAction("create");
     setLink("");
     try {
-      const response = await fetch("http://localhost:3001/api/escrow", {
+      const response = await fetch(`${API_BASE_URL}/api/escrow`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ freelancerAddress: address, amount: Number(amount), description: description }),
@@ -107,7 +107,7 @@ export default function Home() {
       const data = await response.json();
       console.log("Backend response (generateLink):", data); // <-- ADD THIS LOG
       if (data.id) {
-        setLink(`http://localhost:3000/escrow/${data.id}`);
+        setLink(`${window.location.origin}/escrow/${data.id}`);
         setActiveEscrowId(data.id);
         localStorage.setItem("linkpe_active_escrow_id", data.id);
         setToast("Link generated successfully!");

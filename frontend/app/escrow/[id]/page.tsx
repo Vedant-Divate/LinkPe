@@ -4,11 +4,9 @@ import { useParams } from "next/navigation";
 import { useAccount, useWriteContract, useReadContracts, useBlock } from "wagmi";
 import { escrowABI, usdcABI } from "@/lib/abi";
 import { parseUnits } from "viem";
+import { API_BASE_URL, ESCROW_ADDRESS, USDC_ADDRESS } from "@/lib/config";
 import EthCrypto from "eth-crypto";
 import CryptoJS from "crypto-js";
-
-const USDC_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
-const ESCROW_ADDRESS = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
 
 export default function EscrowPage() {
   const params = useParams();
@@ -61,7 +59,7 @@ export default function EscrowPage() {
 
   useEffect(() => {
     if (escrowId) {
-      fetch(`http://localhost:3001/api/escrow/${escrowId}`)
+      fetch(`${API_BASE_URL}/api/escrow/${escrowId}`)
         .then(res => res.json())
         .then(data => setEscrowData(data));
     }
@@ -185,7 +183,7 @@ export default function EscrowPage() {
     setStatus("Fetching and decrypting file...");
     try {
       const trimmedKey = decryptionKey.trim();
-      const response = await fetch(`http://localhost:3001/api/ipfs/${ipfsHash}`);
+      const response = await fetch(`${API_BASE_URL}/api/ipfs/${ipfsHash}`);
       if (!response.ok) throw new Error("Backend failed to fetch IPFS file.");
       const json = await response.json();
       const encryptedAesKeyObject = EthCrypto.cipher.parse(json.encryptedAesKey);
