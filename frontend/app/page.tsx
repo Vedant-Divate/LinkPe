@@ -106,6 +106,9 @@ export default function Home() {
       });
       const data = await response.json();
       console.log("Backend response (generateLink):", data); // <-- ADD THIS LOG
+      if (!response.ok) {
+        throw new Error(data.error || `Backend request failed (${response.status})`);
+      }
       if (data.id) {
         setLink(`${window.location.origin}/escrow/${data.id}`);
         setActiveEscrowId(data.id);
@@ -115,6 +118,7 @@ export default function Home() {
       }
     } catch (error) {
       console.error(error);
+      setToast(error instanceof Error ? error.message : "Failed to generate escrow link");
     } finally {
       setLoadingAction("");
     }
