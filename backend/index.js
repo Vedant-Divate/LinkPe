@@ -47,7 +47,7 @@ app.get("/api/escrow/:id", async (req, res) => {
   }
 });
 
-const PORT = 3001;
+
 
 // IPFS Proxy Route (Bypasses CORS)
 app.get("/api/ipfs/:hash", async (req, res) => {
@@ -102,6 +102,7 @@ app.get("/api/escrows/:freelancerAddress", async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`LinkPe Backend running on http://localhost:${PORT}`);
 });
