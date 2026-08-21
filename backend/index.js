@@ -1,3 +1,5 @@
+require("dotenv").config();
+
 const express = require("express");
 const cors = require("cors");
 const { PrismaClient } = require("@prisma/client");
@@ -8,9 +10,23 @@ const prisma = new PrismaClient();
 app.use(cors());
 app.use(express.json());
 
+app.get("/health", async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.status(200).json({ status: "ok", database: "connected" });
+  } catch (error) {
+    console.error("Health check failed:", error);
+    res.status(503).json({ status: "error", database: "unavailable" });
+  }
+});
+
 // API Route: Create a new Escrow Link (Freelancer step)
 app.post("/api/escrow", async (req, res) => {
   const { freelancerAddress, amount, description } = req.body;
+
+  if (!freelancerAddress || !Number.isInteger(amount) || amount <= 0 || !description?.trim()) {
+    return res.status(400).json({ error: "freelancerAddress, positive integer amount, and description are required" });
+  }
 
   try {
     const newLink = await prisma.escrowLink.create({
@@ -22,8 +38,11 @@ app.post("/api/escrow", async (req, res) => {
     });
     res.status(201).json(newLink);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Failed to create escrow link" });
+    console.error("Create escrow link failed:", error);
+    res.status(500).json({
+      error: "Failed to create escrow link",
+      code: error?.code || "UNKNOWN_ERROR",
+    });
   }
 });
 
