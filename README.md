@@ -473,6 +473,79 @@ Default local ports:
 
 ---
 
+## Docker development
+
+The repository includes containers for the frontend, backend, smart-contract tooling, and a local PostgreSQL instance.
+
+### Start the application stack
+
+```bash
+docker compose up --build
+```
+
+This starts:
+
+- Next.js frontend on `http://localhost:3000`
+- Express backend on `http://localhost:3001`
+- PostgreSQL on `localhost:5432`
+
+The Compose backend runs `prisma db push` on startup for local development. Use migrations and a managed database workflow before using this configuration in production.
+
+### Stop the stack
+
+```bash
+docker compose down
+```
+
+To remove the local database volume as well:
+
+```bash
+docker compose down -v
+```
+
+### Build individual images
+
+```bash
+docker build -t linkpe-backend ./backend
+docker build -t linkpe-frontend ./frontend
+docker build -t linkpe-contracts ./contracts
+```
+
+The frontend image uses Next.js standalone output and runs with the minimal production server.
+
+---
+
+## GitHub Actions CI/CD
+
+The workflow in `.github/workflows/ci.yml` runs validation for pushes and pull requests. It publishes production container images to GitHub Container Registry only after all validation jobs pass on `main`.
+
+| Job | Checks |
+| --- | --- |
+| Contracts | Install dependencies, compile Solidity, run Hardhat tests |
+| Backend | Install dependencies, generate Prisma Client, check JavaScript syntax |
+| Frontend | Install dependencies and create a production Next.js build |
+| Publish images | Build and push backend and frontend images to GHCR |
+
+### Published images
+
+```text
+ghcr.io/<owner>/<repository>-backend:latest
+ghcr.io/<owner>/<repository>-frontend:latest
+```
+
+Each image also receives an immutable commit-SHA tag:
+
+```text
+ghcr.io/<owner>/<repository>-backend:sha-<commit>
+ghcr.io/<owner>/<repository>-frontend:sha-<commit>
+```
+
+The workflow uses the repository-scoped `GITHUB_TOKEN`; no personal access token is required. In repository settings, ensure **Actions > General > Workflow permissions** allows read and write permissions, or explicitly enable package write access for the workflow.
+
+To publish manually, use **Actions > CI/CD > Run workflow** on the `main` branch.
+
+---
+
 ## Environment variables
 
 ### Backend

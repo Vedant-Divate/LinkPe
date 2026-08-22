@@ -1,0 +1,13 @@
+**/node_modules
+**/.next
+**/out
+**/dist
+**/build
+**/coverage
+**/.env*
+.git
+.gitignore
+Dockerfile*
+README.md
+contracts/artifacts
+contracts/cache

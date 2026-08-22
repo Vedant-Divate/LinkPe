@@ -1,58 +1,69 @@
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
 
-// A simple mock ERC20 token for testing
-const MockTokenABI = [
-  "function mint(address to, uint256 amount) public",
-  "function approve(address spender, uint256 amount) public returns bool"
-];
-
 describe("LinkPeEscrow", function () {
-  let escrow, mockUsdc;
-  let freelancer, client;
+  const amount = ethers.parseUnits("100", 18);
+  const escrowId = "escrow-test-1";
+  let escrow;
+  let mockUsdc;
+  let freelancer;
+  let client;
 
-  before(async function () {
+  beforeEach(async function () {
     [freelancer, client] = await ethers.getSigners();
 
-    // Deploy a Mock USDC Token
     const MockToken = await ethers.getContractFactory("MockERC20");
     mockUsdc = await MockToken.deploy("Mock USDC", "USDC", 18);
     await mockUsdc.waitForDeployment();
 
-    // Deploy the Escrow Contract
     const Escrow = await ethers.getContractFactory("LinkPeEscrow");
     escrow = await Escrow.deploy(await mockUsdc.getAddress());
     await escrow.waitForDeployment();
+
+    await mockUsdc.mint(client.address, amount);
+    await mockUsdc.connect(client).approve(await escrow.getAddress(), amount);
   });
 
-  it("Should create escrow", async function () {
-    await escrow.createEscrow(ethers.parseUnits("100", 18));
-    expect((await escrow.currentEscrow()).amount).to.equal(ethers.parseUnits("100", 18));
+  async function fundEscrow() {
+    await escrow.connect(client).createAndFundEscrow(
+      escrowId,
+      freelancer.address,
+      amount,
+    );
+  }
+
+  it("creates and funds an escrow with USDC", async function () {
+    await fundEscrow();
+
+    expect(await escrow.getEscrowClient(escrowId)).to.equal(client.address);
+    expect(await escrow.getEscrowAmount(escrowId)).to.equal(amount);
+    expect(await escrow.getEscrowState(escrowId)).to.equal(1);
+    expect(await mockUsdc.balanceOf(await escrow.getAddress())).to.equal(amount);
   });
 
-  it("Should fund escrow dynamically", async function () {
-    // Client mints 100 USDC and approves the escrow contract
-    await mockUsdc.mint(client.address, ethers.parseUnits("100", 18));
-    await mockUsdc.connect(client).approve(escrow.getAddress(), ethers.parseUnits("100", 18));
+  it("submits work and releases funds after client approval", async function () {
+    await fundEscrow();
 
-    // Client funds the escrow
-    await escrow.connect(client).fundEscrow();
-    expect((await escrow.currentEscrow()).client).to.equal(client.address);
+    await escrow.connect(freelancer).submitWork(escrowId, "QmTestHash");
+    expect(await escrow.getEscrowState(escrowId)).to.equal(2);
+    expect(await escrow.getEscrowIpfsHash(escrowId)).to.equal("QmTestHash");
+
+    await escrow.connect(client).releaseFunds(escrowId);
+
+    expect(await escrow.getEscrowState(escrowId)).to.equal(3);
+    expect(await mockUsdc.balanceOf(freelancer.address)).to.equal(amount);
   });
 
-  it("Should submit work and auto-release after time lock", async function () {
-    // Freelancer submits work
-    await escrow.connect(freelancer).submitWork("QmTestHash");
-    
-    // Fast forward time by 121 seconds (Time lock is 120 seconds)
-    await ethers.provider.send("evm_increaseTime", [121]);
-    await ethers.provider.send("evm_mine", []);
+  it("settles a disputed escrow using a proposed split", async function () {
+    await fundEscrow();
 
-    // Freelancer auto-releases funds
-    await escrow.connect(freelancer).autoReleaseFunds();
-    
-    // Check freelancer got the 100 USDC
-    const bal = await mockUsdc.balanceOf(freelancer.address);
-    expect(bal).to.equal(ethers.parseUnits("100", 18));
+    await escrow.connect(freelancer).submitWork(escrowId, "QmDisputedHash");
+    await escrow.connect(client).rejectWork(escrowId);
+    await escrow.connect(freelancer).proposeSplit(escrowId, 60);
+    await escrow.connect(client).acceptSplit(escrowId);
+
+    expect(await escrow.getEscrowState(escrowId)).to.equal(3);
+    expect(await mockUsdc.balanceOf(freelancer.address)).to.equal(ethers.parseUnits("60", 18));
+    expect(await mockUsdc.balanceOf(client.address)).to.equal(ethers.parseUnits("40", 18));
   });
-}); 
+});
