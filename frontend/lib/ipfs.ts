@@ -1,11 +1,17 @@
 import axios from "axios";
 import  EthCrypto  from "eth-crypto";
 import CryptoJS from "crypto-js";
+import { validateUploadFile } from "./fileValidation";
 
 const PINATA_API_KEY = process.env.NEXT_PUBLIC_PINATA_API_KEY;
 const PINATA_SECRET_KEY = process.env.NEXT_PUBLIC_PINATA_API_SECRET;
 
 export async function encryptAndUploadFile(file: File, clientPublicKey: string) {
+  validateUploadFile(file);
+  if (!clientPublicKey || clientPublicKey.length < 40) {
+    throw new Error("A valid client encryption identity is required.");
+  }
+
   // 1. Convert file to Base64
   const fileData = await file.arrayBuffer();
   const buffer = Buffer.from(fileData);
@@ -33,7 +39,10 @@ export async function encryptAndUploadFile(file: File, clientPublicKey: string) 
     },
   });
 
-  console.log("Uploading to Pinata...");
+  if (!PINATA_API_KEY || !PINATA_SECRET_KEY) {
+    throw new Error("Pinata credentials are not configured.");
+  }
+
   const response = await axios.post("https://api.pinata.cloud/pinning/pinJSONToIPFS", payload, {
     headers: {
       "Content-Type": "application/json",

@@ -2,11 +2,13 @@
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { useAccount, useWriteContract, useReadContracts, useBlock } from "wagmi";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { escrowABI, usdcABI } from "@/lib/abi";
 import { parseUnits } from "viem";
 import { API_BASE_URL, ESCROW_ADDRESS, USDC_ADDRESS } from "@/lib/config";
 import EthCrypto from "eth-crypto";
 import CryptoJS from "crypto-js";
+import { parseEncryptedFilePayload, validatePrivateKey } from "@/lib/fileValidation";
 
 export default function EscrowPage() {
   const params = useParams();
@@ -159,6 +161,20 @@ export default function EscrowPage() {
     }
   };
 
+  const handleDefaultJudgment = async () => {
+    setLoadingAction("judgment");
+    setStatus("Awaiting signature to execute the dispute fallback...");
+    try {
+      await writeContractAsync({ address: ESCROW_ADDRESS, abi: escrowABI, functionName: "defaultJudgment", args: [escrowId] });
+      setStatus("Dispute fallback executed. Funds were settled by the contract rules.");
+    } catch (error: any) {
+      console.error(error);
+      setStatus(`Transaction failed: ${error.shortMessage || error.message}`);
+    } finally {
+      setLoadingAction("");
+    }
+  };
+
   const handleEarlyCancel = async () => {
     setLoadingAction("cancel");
     setStatus("Awaiting signature to cancel escrow...");
@@ -183,9 +199,10 @@ export default function EscrowPage() {
     setStatus("Fetching and decrypting file...");
     try {
       const trimmedKey = decryptionKey.trim();
+      validatePrivateKey(trimmedKey);
       const response = await fetch(`${API_BASE_URL}/api/ipfs/${ipfsHash}`);
       if (!response.ok) throw new Error("Backend failed to fetch IPFS file.");
-      const json = await response.json();
+      const json = parseEncryptedFilePayload(await response.json());
       const encryptedAesKeyObject = EthCrypto.cipher.parse(json.encryptedAesKey);
       const aesKey = await EthCrypto.decryptWithPrivateKey(trimmedKey, encryptedAesKeyObject);
       const decryptedBase64 = CryptoJS.AES.decrypt(json.encryptedFile, aesKey).toString(CryptoJS.enc.Utf8);
@@ -203,7 +220,7 @@ export default function EscrowPage() {
       setStatus("✅ File decrypted and downloaded successfully!");
     } catch (error) {
       console.error("DECRYPTION ERROR DETAILS:", error);
-      setStatus("Decryption failed. Check browser console (F12) for details.");
+      setStatus(error instanceof Error ? error.message : "Decryption failed. Check the key and uploaded file.");
     } finally {
       setLoadingAction("");
     }
@@ -232,6 +249,7 @@ export default function EscrowPage() {
         </div>
         <h1 className="text-4xl font-bold tracking-tight mb-3">Connect Wallet</h1>
         <p className="text-white/50 max-w-md">Please connect your wallet to view and interact with this escrow.</p>
+        <div className="mt-8"><ConnectButton /></div>
       </main>
     );
   }
@@ -382,7 +400,7 @@ export default function EscrowPage() {
                     <p className="text-white/50 mt-1">If you accept, you will receive <strong className="text-green-400">{100 - proposedSplit}%</strong> back.</p>
                   </div>
                 ) : (
-                  <p className="text-xs text-white/50">Waiting for the freelancer to propose a partial refund split...</p>
+                  <p className="text-xs text-white/50">Waiting for the freelancer to propose a partial refund split. The contract also provides a fallback judgment path.</p>
                 )}
               </div>
               {proposedSplit > 0 && (
@@ -390,6 +408,10 @@ export default function EscrowPage() {
                   {loadingAction === "split" ? (<><Spinner /> Processing...</>) : `Accept ${proposedSplit}% Split`}
                 </button>
               )}
+              <button onClick={handleDefaultJudgment} disabled={loadingAction === "judgment"} className="w-full bg-white/10 hover:bg-white/15 text-white/80 border border-white/10 text-sm py-2.5 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                {loadingAction === "judgment" ? (<><Spinner /> Processing...</>) : "Execute Contract Fallback Judgment"}
+              </button>
+              <p className="text-xs text-white/40 text-center">Uses the contract's dispute timeout rules and preserves its settlement logic.</p>
             </div>
           )}
 

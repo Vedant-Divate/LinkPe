@@ -6,6 +6,7 @@ import { escrowABI } from "@/lib/abi";
 import { encryptAndUploadFile } from "@/lib/ipfs";
 import { API_BASE_URL, ESCROW_ADDRESS } from "@/lib/config";
 import EthCrypto from "eth-crypto";
+import { validateUploadFile } from "@/lib/fileValidation";
 // import { useAccount, useWriteContract, useReadContracts, useBlock } from "wagmi";
 
 const TIME_LOCK_SECONDS = 604800; // 7 days
@@ -94,6 +95,34 @@ export default function Home() {
     }
   }, [address, stateNum]); // Refetch when state changes
 
+  const trackEscrow = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const escrowId = manualEscrowId.trim();
+    if (!escrowId || !address) return;
+
+    setLoadingAction("track");
+    setTxStatus("Fetching escrow details...");
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/escrow/${encodeURIComponent(escrowId)}`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Escrow could not be found.");
+      if (data.freelancerAddress?.toLowerCase() !== address.toLowerCase()) {
+        throw new Error("This escrow is assigned to a different freelancer wallet.");
+      }
+
+      setEscrowList((previous) => [data, ...previous.filter((item) => item.id !== data.id)]);
+      setActiveEscrowId(data.id);
+      localStorage.setItem("linkpe_active_escrow_id", data.id);
+      setManualEscrowId("");
+      setActiveTab("active");
+      setTxStatus("Escrow tracked successfully.");
+    } catch (error) {
+      setTxStatus(error instanceof Error ? error.message : "Failed to track escrow.");
+    } finally {
+      setLoadingAction("");
+    }
+  };
+
   const generateLink = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoadingAction("create");
@@ -128,6 +157,12 @@ export default function Home() {
     e.preventDefault();
     if (!file) return alert("Please select a file first.");
     if (!activeEscrowId) return alert("No active escrow ID found.");
+    try {
+      validateUploadFile(file);
+    } catch (error) {
+      setTxStatus(error instanceof Error ? error.message : "The selected file is invalid.");
+      return;
+    }
     setLoadingAction("submit");
     setTxStatus("Encrypting file & uploading to IPFS...");
     try {
@@ -221,12 +256,12 @@ export default function Home() {
       {/* Stats Header */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         <div className="rounded-xl border border-white/5 bg-white/5 p-4">
-          <p className="text-sm text-white/50">Total Earned</p>
+          <p className="text-sm text-white/50">Current Settlement</p>
           <p className="text-2xl font-bold mt-1">{stateNum === 3 ? escrowAmount : 0} <span className="text-sm text-white/50">USDC</span></p>
         </div>
         <div className="rounded-xl border border-white/5 bg-white/5 p-4">
           <p className="text-sm text-white/50">Active Escrows</p>
-          <p className="text-2xl font-bold mt-1">{stateNum > 0 && stateNum !== 5 ? 1 : 0}</p>
+          <p className="text-2xl font-bold mt-1">{escrowList.length}</p>
         </div>
         <div className="rounded-xl border border-white/5 bg-white/5 p-4">
           <p className="text-sm text-white/50">Open Disputes</p>
@@ -238,6 +273,31 @@ export default function Home() {
       <div className="flex gap-1 border-b border-white/10 mb-8">
         <button onClick={() => setActiveTab("create")} className={`px-4 py-2 text-sm font-medium transition-colors ${activeTab === "create" ? "text-white border-b-2 border-blue-500" : "text-white/50 hover:text-white"}`}>Create Escrow</button>
         <button onClick={() => setActiveTab("active")} className={`px-4 py-2 text-sm font-medium transition-colors ${activeTab === "active" ? "text-white border-b-2 border-blue-500" : "text-white/50 hover:text-white"}`}>Active Escrow</button>
+      </div>
+
+      <div className="max-w-2xl mx-auto mb-8 rounded-xl border border-white/5 bg-white/5 p-5">
+        <div className="mb-3">
+          <h2 className="font-semibold">Track an escrow</h2>
+          <p className="text-sm text-white/50 mt-1">Paste the escrow ID shared by your client.</p>
+        </div>
+        <form onSubmit={trackEscrow} className="flex flex-col sm:flex-row gap-3">
+          <input
+            value={manualEscrowId}
+            onChange={(e) => setManualEscrowId(e.target.value)}
+            className="flex-1 px-3 py-2.5 bg-black/30 rounded-lg border border-white/10 focus:outline-none focus:border-blue-500 font-mono text-sm"
+            placeholder="Paste escrow ID"
+            aria-label="Escrow ID"
+            required
+          />
+          <button
+            type="submit"
+            disabled={loadingAction === "track" || !manualEscrowId.trim()}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-5 py-2.5 rounded-lg transition-colors disabled:opacity-50"
+          >
+            {loadingAction === "track" ? "Fetching..." : "Track escrow"}
+          </button>
+        </form>
+        {txStatus && loadingAction === "" && <p className="text-sm text-white/60 mt-3">{txStatus}</p>}
       </div>
 
       {activeTab === "create" && (
@@ -344,7 +404,7 @@ export default function Home() {
               <div className="border-t border-white/10 pt-6 mt-6">
                 <h4 className="font-medium mb-4">Submit Encrypted Work</h4>
                 <form onSubmit={handleFileSubmit} className="space-y-4">
-                  <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} className="w-full text-sm text-white/70 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-500/20 file:text-blue-300 hover:file:bg-blue-500/30 cursor-pointer" required />
+                  <input type="file" accept="*/*" onChange={(e) => setFile(e.target.files?.[0] || null)} className="w-full text-sm text-white/70 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-500/20 file:text-blue-300 hover:file:bg-blue-500/30 cursor-pointer" required />
                   <button type="submit" disabled={loadingAction === "submit"} className="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-2.5 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
                     {loadingAction === "submit" ? (<><Spinner /> Processing...</>) : "Encrypt & Submit Work"}
                   </button>
@@ -383,7 +443,7 @@ export default function Home() {
             <div className="rounded-xl border border-red-500/30 bg-red-900/10 p-6">
               <h3 className="font-bold text-red-400 mb-4">Work Rejected! (Disputed)</h3>
               <div className="flex gap-2">
-                <input type="number" value={splitPercent} onChange={(e) => setSplitPercent(e.target.value)} className="flex-1 px-3 py-2.5 bg-black/30 rounded-lg border border-white/10 focus:outline-none focus:border-blue-500" placeholder="e.g. 50 (for 50%)" />
+                <input type="number" min="1" max="100" value={splitPercent} onChange={(e) => setSplitPercent(e.target.value)} className="flex-1 px-3 py-2.5 bg-black/30 rounded-lg border border-white/10 focus:outline-none focus:border-blue-500" placeholder="Freelancer share: 1-100%" />
                 <button onClick={handleProposeSplit} disabled={loadingAction === "split" || !splitPercent} className="bg-orange-600 hover:bg-orange-700 text-white font-medium py-2.5 px-4 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
                   {loadingAction === "split" ? (<><Spinner /> Processing...</>) : "Propose Split"}
                 </button>

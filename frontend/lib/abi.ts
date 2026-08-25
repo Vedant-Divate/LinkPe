@@ -65,6 +65,13 @@ export const escrowABI = [
     "stateMutability": "nonpayable",
     "type": "function"
   },
+  {
+    "inputs": [{ "internalType": "string", "name": "_escrowId", "type": "string" }],
+    "name": "defaultJudgment",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
   // --- NEW GETTER FUNCTIONS ---
   {
     "inputs": [{ "internalType": "string", "name": "_escrowId", "type": "string" }],
@@ -105,6 +112,13 @@ export const escrowABI = [
     "inputs": [{ "internalType": "string", "name": "_escrowId", "type": "string" }],
     "name": "getEscrowIpfsHash",
     "outputs": [{ "internalType": "string", "name": "", "type": "string" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "TIME_LOCK",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
   }

@@ -24,7 +24,7 @@ app.get("/health", async (_req, res) => {
 app.post("/api/escrow", async (req, res) => {
   const { freelancerAddress, amount, description } = req.body;
 
-  if (!freelancerAddress || !Number.isInteger(amount) || amount <= 0 || !description?.trim()) {
+  if (!/^0x[a-fA-F0-9]{40}$/.test(freelancerAddress || "") || !Number.isInteger(amount) || amount <= 0 || amount > 1000000000 || !description?.trim() || description.trim().length > 1000) {
     return res.status(400).json({ error: "freelancerAddress, positive integer amount, and description are required" });
   }
 
@@ -72,6 +72,9 @@ app.get("/api/escrow/:id", async (req, res) => {
 app.get("/api/ipfs/:hash", async (req, res) => {
   try {
     const hash = req.params.hash;
+    if (!/^(Qm[1-9A-HJ-NP-Za-km-z]{44}|bafy[a-zA-Z0-9]+)$/.test(hash)) {
+      return res.status(400).json({ error: "Invalid IPFS content identifier" });
+    }
     console.log(`Fetching IPFS hash: ${hash}`);
     
     const gateways = [
@@ -99,7 +102,15 @@ app.get("/api/ipfs/:hash", async (req, res) => {
     }
 
     const data = await response.text();
-    res.send(data);
+    try {
+      const payload = JSON.parse(data);
+      if (!payload || typeof payload !== "object" || typeof payload.encryptedFile !== "string" || typeof payload.encryptedAesKey !== "string" || typeof payload.fileName !== "string") {
+        return res.status(422).json({ error: "IPFS payload is not a valid encrypted work package" });
+      }
+      res.type("application/json").json(payload);
+    } catch (_error) {
+      res.status(422).json({ error: "IPFS content is not a JSON work package" });
+    }
   } catch (error) {
     console.error("IPFS Proxy Error:", error);
     res.status(500).json({ error: "Failed to fetch from IPFS" });
