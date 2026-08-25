@@ -64,6 +64,8 @@ LinkPe moves the critical trust boundary into a structured protocol layer:
 | Privacy | AES-256 encryption before file upload |
 | Dispute handling | Freelancer split proposals and client acceptance |
 | Recovery paths | Auto-release and funded-escrow cancellation |
+| Escrow discovery | Freelancer tracking by client-shared escrow ID |
+| Input hardening | File, private-key, IPFS payload, and metadata validation |
 
 The result is a small, auditable primitive for escrowed digital work rather than another all-in-one freelance marketplace.
 
@@ -189,6 +191,7 @@ This layer owns the escrow lifecycle and acts as the settlement authority. It ma
 - release and auto-release behavior
 - dispute initiation and settlement
 - cancellation logic and fee handling
+- fallback judgment execution through the existing dispute timeout rules
 
 ### 2. Backend layer
 
@@ -201,6 +204,7 @@ This layer persists metadata and exposes app-facing APIs. Responsibilities inclu
 - backend health checks
 - IPFS proxy access for browser-safe file retrieval
 - app orchestration between frontend, database, and blockchain metadata
+- request validation for wallet addresses, amounts, descriptions, and IPFS identifiers
 
 ### 3. Frontend layer
 
@@ -381,7 +385,9 @@ The frontend is built with Next.js and TypeScript and provides the user-facing w
 - status-aware dashboard actions
 - copy-to-clipboard link generation
 - loading and toast UX for contract interactions
+- freelancer escrow tracking by pasted escrow ID with wallet ownership verification
 - IPFS fetch/decrypt flow for submitted files
+- file size, filename, private-key, and encrypted payload validation
 - localStorage-based history for client-side context
 
 ---
@@ -465,6 +471,8 @@ npm run dev
 cd frontend
 npm run dev
 ```
+
+Run the frontend development server and production build separately. Both commands use the `.next/` directory, so do not run `npm run build` while `npm run dev` is active. If the dev server reports missing webpack vendor chunks, stop duplicate Next.js processes, remove the generated `frontend/.next` directory, and restart `npm run dev`.
 
 Default local ports:
 
@@ -613,12 +621,9 @@ The current implementation includes practical safeguards but still benefits from
 
 ## Roadmap
 
-### Near term
+### Current status
 
-- improve dispute UX and settlement clarity
-- expand dashboard analytics and data visibility
-- harden file validation and decryption path
-- reduce wallet friction for non-crypto-native users
+The initial near-term MVP scope is implemented: dispute outcomes include the contract fallback path, the dashboard supports escrow tracking by ID, encrypted file handling is validated, and escrow links provide a wallet connection path for clients.
 
 ### Mid term
 
